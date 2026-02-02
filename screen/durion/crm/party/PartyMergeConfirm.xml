@@ -1,0 +1,309 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<screen xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://moqui.org/xsd/xml-screen-3.xsd" default-menu-title="Merge Parties - Confirm" default-menu-index="5">
+
+    <parameter name="partyId1" required="true"/>
+    <parameter name="partyId2" required="true"/>
+    <parameter name="correlationId"/>
+
+    <transition name="executeMerge">
+        <service-call name="durion.crm.PartyServices.merge#Parties"/>
+        <conditional-response url="../PartyMergeResult">
+            <parameter name="mergeId"/>
+        </conditional-response>
+        <default-response url="."/>
+    </transition>
+
+    <transition name="PartyMergeSearch">
+        <default-response url="../PartyMergeSearch"/>
+    </transition>
+
+    <transition name="PartyDetail">
+        <default-response url="../PartyDetail"/>
+    </transition>
+
+    <actions>
+        <!-- Get details for both parties -->
+        <service-call name="durion.crm.PartyServices.get#Party" in-map="[partyId: partyId1]" out-map="party1Result"/>
+        <set field="party1" from="party1Result.party"/>
+
+        <service-call name="durion.crm.PartyServices.get#Party" in-map="[partyId: partyId2]" out-map="party2Result"/>
+        <set field="party2" from="party2Result.party"/>
+
+        <!-- Check permissions -->
+        <set field="canMerge" from="ec.user.hasPermission('crm:party:merge')"/>
+    </actions>
+
+    <widgets>
+        <container-box>
+            <box-header title="Confirm Party Merge"/>
+            <box-toolbar>
+                <link url="PartyMergeSearch" text="Back to Search"/>
+            </box-toolbar>
+            <box-body>
+
+                <!-- Permission Denied -->
+                <section name="PermissionDeniedSection" condition="!canMerge">
+                    <widgets>
+                        <container style="alert alert-danger">
+                            <label text="Access Denied" type="h5"/>
+                            <label text="You do not have permission to merge parties. Required permission: crm:party:merge"/>
+                        </container>
+                    </widgets>
+                </section>
+
+                <!-- Error State -->
+                <section name="ErrorSection" condition="ec.message.hasError()">
+                    <widgets>
+                        <container style="alert alert-danger">
+                            <label text="Error" type="h5"/>
+                            <render-mode>
+                                <text type="html" location="component://webroot/screen/webroot/MessageText.html.ftl"/>
+                            </render-mode>
+                            <section name="CorrelationIdSection" condition="correlationId">
+                                <widgets>
+                                    <label text="Correlation ID: ${correlationId}" style="text-muted small"/>
+                                </widgets>
+                            </section>
+                        </container>
+                    </widgets>
+                </section>
+
+                <section name="MainSection" condition="canMerge &amp;&amp; party1 &amp;&amp; party2">
+                    <widgets>
+
+                        <!-- Instructions -->
+                        <container style="alert alert-warning mb-4">
+                            <label text="Party Merge Process" type="h6"/>
+                            <label text="Step 2 of 3: Review and confirm merge"/>
+                            <ul>
+                                <li>
+                                    <label text="Review the details of both parties below"/>
+                                </li>
+                                <li>
+                                    <label text="Select which party will be the SURVIVOR (primary record)"/>
+                                </li>
+                                <li>
+                                    <label text="The non-survivor party will be marked MERGED and redirect to the survivor"/>
+                                </li>
+                                <li>
+                                    <label text="Provide a justification for the merge (required)"/>
+                                </li>
+                                <li>
+                                    <label text="This action CANNOT be undone"/>
+                                </li>
+                            </ul>
+                        </container>
+
+                        <!-- Side-by-Side Party Comparison -->
+                        <container style="row mb-4">
+
+                            <!-- Party 1 Details -->
+                            <container style="col-md-6">
+                                <container-box>
+                                    <box-header title="Party 1"/>
+                                    <box-body>
+                                        <dl class="row">
+                                            <dt class="col-sm-4">Party ID:</dt>
+                                            <dd class="col-sm-8">
+                                                <link url="PartyDetail" text="${party1.partyId}" link-type="anchor">
+                                                    <parameter name="partyId" from="party1.partyId"/>
+                                                </link>
+                                            </dd>
+
+                                            <dt class="col-sm-4">Type:</dt>
+                                            <dd class="col-sm-8">
+                                                <label text="${party1.partyType == 'ORGANIZATION' ? 'Commercial Account' : 'Person'}"/>
+                                            </dd>
+
+                                            <dt class="col-sm-4">Name:</dt>
+                                            <dd class="col-sm-8">
+                                                <label text="${party1.legalName ?: party1.fullName}"/>
+                                            </dd>
+
+                                            <section name="Party1DbaName" condition="party1.dbaName">
+                                                <widgets>
+                                                    <dt class="col-sm-4">DBA Name:</dt>
+                                                    <dd class="col-sm-8">
+                                                        <label text="${party1.dbaName}"/>
+                                                    </dd>
+                                                </widgets>
+                                            </section>
+
+                                            <section name="Party1TaxId" condition="party1.taxId">
+                                                <widgets>
+                                                    <dt class="col-sm-4">Tax ID:</dt>
+                                                    <dd class="col-sm-8">
+                                                        <label text="${party1.taxId}"/>
+                                                    </dd>
+                                                </widgets>
+                                            </section>
+
+                                            <section name="Party1Email" condition="party1.primaryEmail">
+                                                <widgets>
+                                                    <dt class="col-sm-4">Email:</dt>
+                                                    <dd class="col-sm-8">
+                                                        <label text="${party1.primaryEmail}"/>
+                                                    </dd>
+                                                </widgets>
+                                            </section>
+
+                                            <section name="Party1Phone" condition="party1.primaryPhone">
+                                                <widgets>
+                                                    <dt class="col-sm-4">Phone:</dt>
+                                                    <dd class="col-sm-8">
+                                                        <label text="${party1.primaryPhone}"/>
+                                                    </dd>
+                                                </widgets>
+                                            </section>
+
+                                            <dt class="col-sm-4">Status:</dt>
+                                            <dd class="col-sm-8">
+                                                <label text="${party1.status}"/>
+                                            </dd>
+
+                                            <dt class="col-sm-4">Created:</dt>
+                                            <dd class="col-sm-8">
+                                                <label text="${ec.l10n.format(party1.createdAt, 'yyyy-MM-dd HH:mm')}"/>
+                                            </dd>
+                                        </dl>
+                                    </box-body>
+                                </container-box>
+                            </container>
+
+                            <!-- Party 2 Details -->
+                            <container style="col-md-6">
+                                <container-box>
+                                    <box-header title="Party 2"/>
+                                    <box-body>
+                                        <dl class="row">
+                                            <dt class="col-sm-4">Party ID:</dt>
+                                            <dd class="col-sm-8">
+                                                <link url="PartyDetail" text="${party2.partyId}" link-type="anchor">
+                                                    <parameter name="partyId" from="party2.partyId"/>
+                                                </link>
+                                            </dd>
+
+                                            <dt class="col-sm-4">Type:</dt>
+                                            <dd class="col-sm-8">
+                                                <label text="${party2.partyType == 'ORGANIZATION' ? 'Commercial Account' : 'Person'}"/>
+                                            </dd>
+
+                                            <dt class="col-sm-4">Name:</dt>
+                                            <dd class="col-sm-8">
+                                                <label text="${party2.legalName ?: party2.fullName}"/>
+                                            </dd>
+
+                                            <section name="Party2DbaName" condition="party2.dbaName">
+                                                <widgets>
+                                                    <dt class="col-sm-4">DBA Name:</dt>
+                                                    <dd class="col-sm-8">
+                                                        <label text="${party2.dbaName}"/>
+                                                    </dd>
+                                                </widgets>
+                                            </section>
+
+                                            <section name="Party2TaxId" condition="party2.taxId">
+                                                <widgets>
+                                                    <dt class="col-sm-4">Tax ID:</dt>
+                                                    <dd class="col-sm-8">
+                                                        <label text="${party2.taxId}"/>
+                                                    </dd>
+                                                </widgets>
+                                            </section>
+
+                                            <section name="Party2Email" condition="party2.primaryEmail">
+                                                <widgets>
+                                                    <dt class="col-sm-4">Email:</dt>
+                                                    <dd class="col-sm-8">
+                                                        <label text="${party2.primaryEmail}"/>
+                                                    </dd>
+                                                </widgets>
+                                            </section>
+
+                                            <section name="Party2Phone" condition="party2.primaryPhone">
+                                                <widgets>
+                                                    <dt class="col-sm-4">Phone:</dt>
+                                                    <dd class="col-sm-8">
+                                                        <label text="${party2.primaryPhone}"/>
+                                                    </dd>
+                                                </widgets>
+                                            </section>
+
+                                            <dt class="col-sm-4">Status:</dt>
+                                            <dd class="col-sm-8">
+                                                <label text="${party2.status}"/>
+                                            </dd>
+
+                                            <dt class="col-sm-4">Created:</dt>
+                                            <dd class="col-sm-8">
+                                                <label text="${ec.l10n.format(party2.createdAt, 'yyyy-MM-dd HH:mm')}"/>
+                                            </dd>
+                                        </dl>
+                                    </box-body>
+                                </container-box>
+                            </container>
+
+                        </container>
+
+                        <!-- Merge Execution Form -->
+                        <container-box>
+                            <box-header title="Execute Merge"/>
+                            <box-body>
+                                <form-single name="MergeForm" transition="executeMerge">
+
+                                    <field name="partyId1">
+                                        <default-field>
+                                            <hidden/>
+                                        </default-field>
+                                    </field>
+                                    <field name="partyId2">
+                                        <default-field>
+                                            <hidden/>
+                                        </default-field>
+                                    </field>
+
+                                    <field name="survivorPartyId">
+                                        <default-field title="Select Survivor (Primary Record)*">
+                                            <radio no-current-selected-key="${party1.partyId}">
+                                                <option key="${party1.partyId}" text="Party 1: ${party1.legalName ?: party1.fullName} (${party1.partyId})"/>
+                                                <option key="${party2.partyId}" text="Party 2: ${party2.legalName ?: party2.fullName} (${party2.partyId})"/>
+                                            </radio>
+                                            <label text="The selected party will remain active. The other will be marked MERGED." style="form-text text-muted small"/>
+                                        </default-field>
+                                    </field>
+
+                                    <field name="mergeJustification">
+                                        <default-field title="Justification*">
+                                            <text-area rows="4" cols="60" maxlength="500"/>
+                                            <label text="(Required, 5-500 characters. Explain why these parties are being merged.)" style="form-text text-muted small"/>
+                                        </default-field>
+                                    </field>
+
+                                    <field name="confirmCheckbox">
+                                        <default-field title="">
+                                            <check>
+                                                <option key="true" text="I confirm this merge operation. I understand this action CANNOT be undone."/>
+                                            </check>
+                                        </default-field>
+                                    </field>
+
+                                    <field name="submitButton">
+                                        <conditional-field condition="confirmCheckbox">
+                                            <submit text="Execute Merge" style="btn-danger" confirmation="Are you absolutely sure? This will permanently merge these two parties."/>
+                                        </conditional-field>
+                                        <default-field title="">
+                                            <label text="You must check the confirmation box above to proceed" style="text-danger"/>
+                                        </default-field>
+                                    </field>
+
+                                </form-single>
+                            </box-body>
+                        </container-box>
+
+                    </widgets>
+                </section>
+
+            </box-body>
+        </container-box>
+    </widgets>
+</screen>

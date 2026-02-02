@@ -1,0 +1,297 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<screen xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://moqui.org/xsd/xml-screen-3.xsd" default-menu-title="Account Contacts" default-menu-index="3">
+
+    <parameter name="partyId" required="true"/>
+    <parameter name="correlationId"/>
+
+    <transition name="addContact">
+        <service-call name="durion.crm.PartyServices.create#PartyRelationship"/>
+        <default-response url=".">
+            <parameter name="partyId"/>
+        </default-response>
+    </transition>
+
+    <transition name="setPrimaryBilling">
+        <service-call name="durion.crm.PartyServices.setPrimaryBilling#Contact"/>
+        <default-response url=".">
+            <parameter name="partyId"/>
+        </default-response>
+    </transition>
+
+    <transition name="deactivateContact">
+        <service-call name="durion.crm.PartyServices.deactivate#PartyRelationship"/>
+        <default-response url=".">
+            <parameter name="partyId"/>
+        </default-response>
+    </transition>
+
+    <transition name="PartyDetail">
+        <default-response url="../PartyDetail"/>
+    </transition>
+
+    <transition name="PersonCreate">
+        <default-response url="../PersonCreate"/>
+    </transition>
+
+    <transition name="PartyFind">
+        <default-response url="../PartyFind"/>
+    </transition>
+
+    <actions>
+        <!-- Get account details -->
+        <service-call name="durion.crm.PartyServices.get#Party" in-map="[partyId: partyId]" out-map="partyResult"/>
+        <set field="account" from="partyResult.party"/>
+
+        <!-- List existing contacts -->
+        <service-call name="durion.crm.PartyServices.list#PartyRelationships" in-map="[fromPartyId: partyId, activeOnly: true]" out-map="relationshipsResult"/>
+        <set field="contacts" from="relationshipsResult.items ?: []"/>
+
+        <!-- Check permissions -->
+        <set field="canEdit" from="ec.user.hasPermission('crm:party:edit')"/>
+    </actions>
+
+    <widgets>
+        <container-box>
+            <box-header title="Commercial Account Contacts"/>
+            <box-toolbar>
+                <link url="PartyDetail" text="Back to Account">
+                    <parameter name="partyId"/>
+                </link>
+            </box-toolbar>
+            <box-body>
+
+                <!-- Permission Denied -->
+                <section name="PermissionDeniedSection" condition="!ec.user.hasPermission('crm:party:view')">
+                    <widgets>
+                        <container style="alert alert-danger">
+                            <label text="Access Denied" type="h5"/>
+                            <label text="You do not have permission to view account contacts. Required permission: crm:party:view"/>
+                        </container>
+                    </widgets>
+                </section>
+
+                <!-- Error State -->
+                <section name="ErrorSection" condition="ec.message.hasError()">
+                    <widgets>
+                        <container style="alert alert-danger">
+                            <label text="Error" type="h5"/>
+                            <render-mode>
+                                <text type="html" location="component://webroot/screen/webroot/MessageText.html.ftl"/>
+                            </render-mode>
+                            <section name="CorrelationIdSection" condition="correlationId">
+                                <widgets>
+                                    <label text="Correlation ID: ${correlationId}" style="text-muted small"/>
+                                </widgets>
+                            </section>
+                        </container>
+                    </widgets>
+                </section>
+
+                <!-- Success Messages -->
+                <section name="SuccessSection" condition="ec.message.messages">
+                    <widgets>
+                        <container style="alert alert-success">
+                            <render-mode>
+                                <text type="html" location="component://webroot/screen/webroot/MessageText.html.ftl"/>
+                            </render-mode>
+                        </container>
+                    </widgets>
+                </section>
+
+                <section name="MainSection" condition="ec.user.hasPermission('crm:party:view')">
+                    <widgets>
+
+                        <!-- Account Summary -->
+                        <section name="AccountSummary" condition="account">
+                            <widgets>
+                                <container style="mb-4">
+                                    <label text="Account: ${account.legalName}" type="h6"/>
+                                    <label text="Party ID: ${partyId}" style="text-muted small"/>
+                                </container>
+                            </widgets>
+                        </section>
+
+                        <!-- Add Contact Form -->
+                        <section name="AddContactSection" condition="canEdit">
+                            <widgets>
+                                <container-box>
+                                    <box-header title="Add Contact to Account"/>
+                                    <box-body>
+                                        <form-single name="AddContactForm" transition="addContact">
+                                            <field name="partyId">
+                                                <default-field>
+                                                    <hidden/>
+                                                </default-field>
+                                            </field>
+
+                                            <field name="toPartyId">
+                                                <default-field title="Person*">
+                                                    <text-line size="50"/>
+                                                    <label text="Enter Person Party ID or use search" style="form-text text-muted small"/>
+                                                </default-field>
+                                            </field>
+
+                                            <field name="relationshipTypeCode">
+                                                <default-field title="Role*">
+                                                    <drop-down>
+                                                        <option key="APPROVER" text="Approver - Can approve estimates"/>
+                                                        <option key="BILLING" text="Billing Contact - Receives invoices"/>
+                                                    </drop-down>
+                                                </default-field>
+                                            </field>
+
+                                            <field name="isPrimaryBilling">
+                                                <conditional-field condition="relationshipTypeCode == 'BILLING'" title="">
+                                                    <check>
+                                                        <option key="true" text="Set as Primary Billing Contact"/>
+                                                    </check>
+                                                    <label text="(Only one primary billing contact allowed per account)" style="form-text text-muted small"/>
+                                                </conditional-field>
+                                                <default-field>
+                                                    <ignored/>
+                                                </default-field>
+                                            </field>
+
+                                            <field name="submitButton">
+                                                <default-field title="">
+                                                    <submit text="Add Contact"/>
+                                                </default-field>
+                                            </field>
+                                        </form-single>
+
+                                        <container style="mt-3">
+                                            <label text="Don't have a Person ID?" style="text-muted"/>
+                                            <link url="PersonCreate" text="Create New Person" link-type="anchor"/>
+                                            <label text=" or " style="mx-2"/>
+                                            <link url="PartyFind" text="Search for Existing Person" link-type="anchor">
+                                                <parameter name="partyType" value="PERSON"/>
+                                            </link>
+                                        </container>
+                                    </box-body>
+                                </container-box>
+                            </widgets>
+                        </section>
+
+                        <!-- Existing Contacts List -->
+                        <container-box>
+                            <box-header title="Existing Contacts"/>
+                            <box-body>
+
+                                <section name="NoContacts" condition="contacts.isEmpty()">
+                                    <widgets>
+                                        <container style="alert alert-info">
+                                            <label text="No contacts associated with this account yet."/>
+                                        </container>
+                                    </widgets>
+                                </section>
+
+                                <section name="ContactsList" condition="!contacts.isEmpty()">
+                                    <widgets>
+                                        <form-list name="ContactsList" list="contacts" skip-form="true">
+
+                                            <field name="toPartyId">
+                                                <default-field title="Person">
+                                                    <link url="PartyDetail" text="${toPartyFullName} (${toPartyId})" link-type="anchor">
+                                                        <parameter name="partyId" from="toPartyId"/>
+                                                    </link>
+                                                </default-field>
+                                            </field>
+
+                                            <field name="relationshipTypeCode">
+                                                <default-field title="Role">
+                                                    <display text="${relationshipTypeDescription ?: relationshipTypeCode}"/>
+                                                </default-field>
+                                            </field>
+
+                                            <field name="isPrimaryBilling">
+                                                <default-field title="Primary Billing">
+                                                    <display text="${isPrimaryBilling == true ? 'Yes' : ''}"/>
+                                                </default-field>
+                                            </field>
+
+                                            <field name="contactInfo">
+                                                <default-field title="Contact Info">
+                                                    <display text="${primaryEmail ?: ''} ${primaryPhone ? '(' + primaryPhone + ')' : ''}"/>
+                                                </default-field>
+                                            </field>
+
+                                            <field name="status">
+                                                <default-field>
+                                                    <display text="${status}"/>
+                                                </default-field>
+                                            </field>
+
+                                            <field name="createdAt">
+                                                <default-field title="Added">
+                                                    <display text="${ec.l10n.format(createdAt, 'yyyy-MM-dd')}"/>
+                                                </default-field>
+                                            </field>
+
+                                            <!-- Actions -->
+                                            <field name="actions">
+                                                <conditional-field condition="canEdit &amp;&amp; status == 'ACTIVE'">
+                                                    <container>
+                                                        <!-- Set Primary Billing (only for BILLING role) -->
+                                                        <section name="SetPrimarySection" condition="relationshipTypeCode == 'BILLING' &amp;&amp; !isPrimaryBilling">
+                                                            <widgets>
+                                                                <link url="setPrimaryBilling" text="Set Primary" link-type="anchor">
+                                                                    <parameter name="partyId" from="partyId"/>
+                                                                    <parameter name="relationshipId"/>
+                                                                </link>
+                                                                <label text=" | " style="mx-1"/>
+                                                            </widgets>
+                                                        </section>
+
+                                                        <!-- Deactivate -->
+                                                        <link url="deactivateContact" text="Deactivate" link-type="anchor" confirmation="Are you sure you want to deactivate this contact relationship?">
+                                                            <parameter name="partyId" from="partyId"/>
+                                                            <parameter name="relationshipId"/>
+                                                        </link>
+                                                    </container>
+                                                </conditional-field>
+                                                <default-field>
+                                                    <display text=""/>
+                                                </default-field>
+                                            </field>
+
+                                        </form-list>
+                                    </widgets>
+                                </section>
+
+                            </box-body>
+                        </container-box>
+
+                        <!-- Business Rules Info Panel -->
+                        <container-box>
+                            <box-header title="Business Rules"/>
+                            <box-body>
+                                <container style="alert alert-info">
+                                    <label text="Contact Relationship Rules:" type="strong"/>
+                                    <ul>
+                                        <li>
+                                            <label text="APPROVER: Person authorized to approve work order estimates for this account"/>
+                                        </li>
+                                        <li>
+                                            <label text="BILLING: Person who receives invoices and billing communications"/>
+                                        </li>
+                                        <li>
+                                            <label text="Each account must have exactly one PRIMARY billing contact"/>
+                                        </li>
+                                        <li>
+                                            <label text="Setting a new primary billing contact automatically removes primary flag from the previous one"/>
+                                        </li>
+                                        <li>
+                                            <label text="Deactivated contacts remain in history but are not shown in active lists"/>
+                                        </li>
+                                    </ul>
+                                </container>
+                            </box-body>
+                        </container-box>
+
+                    </widgets>
+                </section>
+
+            </box-body>
+        </container-box>
+    </widgets>
+</screen>

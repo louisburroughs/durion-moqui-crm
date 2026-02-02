@@ -1,0 +1,146 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<screen xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+        xsi:noNamespaceSchemaLocation="http://moqui.org/xsd/xml-screen-3.xsd"
+        default-menu-title="Merge Parties - Result" 
+        default-menu-index="6">
+
+    <parameter name="mergeId" required="true"/>
+    <parameter name="correlationId"/>
+    
+    <transition name="PartyDetail">
+        <default-response url="../PartyDetail"/>
+    </transition>
+    
+    <transition name="PartyMergeSearch">
+        <default-response url="../PartyMergeSearch"/>
+    </transition>
+    
+    <transition name="PartyFind">
+        <default-response url="../PartyFind"/>
+    </transition>
+    
+    <actions>
+        <!-- In a real implementation, we'd fetch merge result details from backend -->
+        <!-- For now, we'll use the mergeId parameter which should contain result info -->
+        <set field="mergeResult" from="mergeId ? [mergeId: mergeId] : null"/>
+    </actions>
+    
+    <widgets>
+        <container-box>
+            <box-header title="Party Merge Result"/>
+            <box-body>
+                
+                <!-- Error State -->
+                <section name="ErrorSection" condition="ec.message.hasError()">
+                    <widgets>
+                        <container style="alert alert-danger">
+                            <label text="Merge Failed" type="h5"/>
+                            <render-mode><text type="html" location="component://webroot/screen/webroot/MessageText.html.ftl"/></render-mode>
+                            <section name="CorrelationIdSection" condition="correlationId">
+                                <widgets>
+                                    <label text="Correlation ID: ${correlationId}" style="text-muted small"/>
+                                </widgets>
+                            </section>
+                            <container style="mt-3">
+                                <link url="PartyMergeSearch" text="Back to Merge Search"/>
+                            </container>
+                        </container>
+                    </widgets>
+                </section>
+                
+                <!-- Success State -->
+                <section name="SuccessSection" condition="mergeResult &amp;&amp; !ec.message.hasError()">
+                    <widgets>
+                        
+                        <container style="alert alert-success">
+                            <label text="Party Merge Successful" type="h5"/>
+                            <label text="The parties have been successfully merged."/>
+                        </container>
+                        
+                        <container-box>
+                            <box-header title="Merge Details"/>
+                            <box-body>
+                                <dl class="row">
+                                    <dt class="col-sm-3">Merge ID:</dt>
+                                    <dd class="col-sm-9"><label text="${mergeResult.mergeId}"/></dd>
+                                    
+                                    <section name="SurvivorSection" condition="mergeResult.survivorPartyId">
+                                        <widgets>
+                                            <dt class="col-sm-3">Survivor Party:</dt>
+                                            <dd class="col-sm-9">
+                                                <link url="PartyDetail" text="${mergeResult.survivorPartyId}" link-type="anchor">
+                                                    <parameter name="partyId" from="mergeResult.survivorPartyId"/>
+                                                </link>
+                                            </dd>
+                                        </widgets>
+                                    </section>
+                                    
+                                    <section name="MergedSection" condition="mergeResult.mergedPartyId">
+                                        <widgets>
+                                            <dt class="col-sm-3">Merged Party:</dt>
+                                            <dd class="col-sm-9">
+                                                <label text="${mergeResult.mergedPartyId}"/>
+                                                <label text="(Now redirects to survivor)" style="text-muted small"/>
+                                            </dd>
+                                        </widgets>
+                                    </section>
+                                    
+                                    <section name="ExecutedAtSection" condition="mergeResult.executedAt">
+                                        <widgets>
+                                            <dt class="col-sm-3">Executed At:</dt>
+                                            <dd class="col-sm-9"><label text="${ec.l10n.format(mergeResult.executedAt, 'yyyy-MM-dd HH:mm:ss')}"/></dd>
+                                        </widgets>
+                                    </section>
+                                    
+                                    <section name="ExecutedBySection" condition="mergeResult.executedBy">
+                                        <widgets>
+                                            <dt class="col-sm-3">Executed By:</dt>
+                                            <dd class="col-sm-9"><label text="${mergeResult.executedBy}"/></dd>
+                                        </widgets>
+                                    </section>
+                                    
+                                    <section name="JustificationSection" condition="mergeResult.justification">
+                                        <widgets>
+                                            <dt class="col-sm-3">Justification:</dt>
+                                            <dd class="col-sm-9"><label text="${mergeResult.justification}"/></dd>
+                                        </widgets>
+                                    </section>
+                                </dl>
+                            </box-body>
+                        </container-box>
+                        
+                        <container-box>
+                            <box-header title="What Happened"/>
+                            <box-body>
+                                <container style="alert alert-info">
+                                    <ul>
+                                        <li><label text="The merged party status has been set to MERGED"/></li>
+                                        <li><label text="All references to the merged party now redirect to the survivor party"/></li>
+                                        <li><label text="Historical data has been preserved for audit purposes"/></li>
+                                        <li><label text="Future queries for the merged party will automatically resolve to the survivor"/></li>
+                                        <li><label text="This operation has been logged in the audit trail"/></li>
+                                    </ul>
+                                </container>
+                            </box-body>
+                        </container-box>
+                        
+                        <!-- Actions -->
+                        <container style="mt-4">
+                            <section name="ViewSurvivorSection" condition="mergeResult.survivorPartyId">
+                                <widgets>
+                                    <link url="PartyDetail" text="View Survivor Party" style="btn btn-primary mr-2">
+                                        <parameter name="partyId" from="mergeResult.survivorPartyId"/>
+                                    </link>
+                                </widgets>
+                            </section>
+                            <link url="PartyMergeSearch" text="Merge More Parties" style="btn btn-secondary mr-2"/>
+                            <link url="PartyFind" text="Back to Party Search" style="btn btn-secondary"/>
+                        </container>
+                        
+                    </widgets>
+                </section>
+                
+            </box-body>
+        </container-box>
+    </widgets>
+</screen>

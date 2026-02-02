@@ -1,0 +1,438 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<screen xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://moqui.org/xsd/xml-screen-3.xsd" default-menu-title="Create Person" default-menu-index="2">
+
+    <parameter name="duplicateCandidates" type="List"/>
+    <parameter name="duplicateOverrideJustification"/>
+    <parameter name="correlationId"/>
+
+    <transition name="createPerson">
+        <service-call name="durion.crm.PartyServices.create#Person"/>
+        <conditional-response url="../PartyDetail">
+            <parameter name="partyId" from="partyId"/>
+        </conditional-response>
+        <default-response url="."/>
+    </transition>
+
+    <transition name="checkDuplicates">
+        <service-call name="durion.crm.PartyServices.check#DuplicateParties"/>
+        <default-response url="."/>
+    </transition>
+
+    <transition name="PartyDetail">
+        <default-response url="../PartyDetail"/>
+    </transition>
+
+    <transition name="PartyFind">
+        <default-response url="../PartyFind"/>
+    </transition>
+
+    <actions>
+        <!-- Initialize contact points arrays -->
+        <set field="emails" from="emails ?: []"/>
+        <set field="phones" from="phones ?: []"/>
+
+        <!-- Default to one email and one phone if empty -->
+        <if condition="emails.isEmpty()">
+            <set field="emails" from="[[email: '', kind: 'WORK', isPrimary: true]]"/>
+        </if>
+        <if condition="phones.isEmpty()">
+            <set field="phones" from="[[phoneNumber: '', kind: 'WORK', isPrimary: true, extension: '']]"/>
+        </if>
+    </actions>
+
+    <widgets>
+        <container-box>
+            <box-header title="Create Individual Person"/>
+            <box-toolbar>
+                <link url="PartyFind" text="Back to Search"/>
+            </box-toolbar>
+            <box-body>
+
+                <!-- Permission Denied -->
+                <section name="PermissionDeniedSection" condition="ec.user.hasPermission('crm:party:create') == false">
+                    <widgets>
+                        <container style="alert alert-danger">
+                            <label text="Access Denied" type="h5"/>
+                            <label text="You do not have permission to create persons. Required permission: crm:party:create"/>
+                        </container>
+                    </widgets>
+                </section>
+
+                <!-- Success State -->
+                <section name="SuccessSection" condition="partyId">
+                    <widgets>
+                        <container style="alert alert-success">
+                            <label text="Person Created Successfully" type="h5"/>
+                            <label text="Party ID: ${partyId}"/>
+                            <container style="mt-3">
+                                <link url="PartyDetail" text="View Person Details">
+                                    <parameter name="partyId" from="partyId"/>
+                                </link>
+                                <label text=" | " style="mx-2"/>
+                                <link url="PersonCreate" text="Create Another Person"/>
+                                <label text=" | " style="mx-2"/>
+                                <link url="PartyFind" text="Back to Search"/>
+                            </container>
+                        </container>
+                    </widgets>
+                </section>
+
+                <!-- Error State -->
+                <section name="ErrorSection" condition="ec.message.hasError()">
+                    <widgets>
+                        <container style="alert alert-danger">
+                            <label text="Error Creating Person" type="h5"/>
+                            <render-mode>
+                                <text type="html" location="component://webroot/screen/webroot/MessageText.html.ftl"/>
+                            </render-mode>
+                            <section name="CorrelationIdSection" condition="correlationId">
+                                <widgets>
+                                    <label text="Correlation ID: ${correlationId}" style="text-muted small"/>
+                                </widgets>
+                            </section>
+                        </container>
+                    </widgets>
+                </section>
+
+                <!-- Duplicate Detection Panel -->
+                <section name="DuplicatePanel" condition="duplicateCandidates &amp;&amp; !duplicateCandidates.isEmpty()">
+                    <widgets>
+                        <container style="alert alert-warning">
+                            <label text="Potential Duplicate Persons Found" type="h5"/>
+                            <label text="The following persons may already exist:"/>
+                            <container-box>
+                                <box-body>
+                                    <form-list name="DuplicateCandidatesList" list="duplicateCandidates" skip-form="true">
+                                        <field name="partyId">
+                                            <default-field title="Party ID">
+                                                <link url="PartyDetail" text="${partyId}" link-type="anchor">
+                                                    <parameter name="partyId"/>
+                                                </link>
+                                            </default-field>
+                                        </field>
+                                        <field name="fullName">
+                                            <default-field>
+                                                <display/>
+                                            </default-field>
+                                        </field>
+                                        <field name="primaryEmail">
+                                            <default-field title="Email">
+                                                <display/>
+                                            </default-field>
+                                        </field>
+                                        <field name="primaryPhone">
+                                            <default-field title="Phone">
+                                                <display/>
+                                            </default-field>
+                                        </field>
+                                        <field name="matchReason">
+                                            <default-field title="Match Reason">
+                                                <display/>
+                                            </default-field>
+                                        </field>
+                                    </form-list>
+                                </box-body>
+                            </container-box>
+                            <label text="If you are certain this is not a duplicate, provide justification below and submit again:"/>
+                        </container>
+                    </widgets>
+                </section>
+
+                <!-- Create Person Form -->
+                <section name="CreateFormSection" condition="!partyId &amp;&amp; ec.user.hasPermission('crm:party:create')">
+                    <widgets>
+                        <form-single name="CreatePersonForm" transition="createPerson">
+
+                            <!-- Basic Information -->
+                            <field name="sectionHeader">
+                                <default-field>
+                                    <label text="Basic Information" type="h6"/>
+                                </default-field>
+                            </field>
+
+                            <field name="firstName">
+                                <default-field title="First Name*">
+                                    <text-line size="50" maxlength="100"/>
+                                </default-field>
+                            </field>
+
+                            <field name="middleName">
+                                <default-field title="Middle Name">
+                                    <text-line size="50" maxlength="100"/>
+                                </default-field>
+                            </field>
+
+                            <field name="lastName">
+                                <default-field title="Last Name*">
+                                    <text-line size="50" maxlength="100"/>
+                                </default-field>
+                            </field>
+
+                            <field name="preferredName">
+                                <default-field title="Preferred Name">
+                                    <text-line size="50" maxlength="100"/>
+                                    <label text="(Optional - how the person prefers to be addressed)" style="form-text text-muted small"/>
+                                </default-field>
+                            </field>
+
+                            <!-- Email Contact Points -->
+                            <field name="emailHeader">
+                                <default-field>
+                                    <label text="Email Addresses" type="h6"/>
+                                </default-field>
+                            </field>
+
+                            <field name="emails">
+                                <default-field>
+                                    <container id="emailContainer">
+                                        <render-mode>
+                                            <text type="html"><![CDATA[
+                                            <div id="emailList">
+                                                <#list emails as email>
+                                                <div class="row mb-2 email-row">
+                                                    <div class="col-md-5">
+                                                        <input type="email" name="emails[${email_index}].email" value="${email.email!}" class="form-control" placeholder="email@example.com" required />
+                                                    </div>
+                                                    <div class="col-md-3">
+                                                        <select name="emails[${email_index}].kind" class="form-control" required>
+                                                            <option value="WORK" ${email.kind == 'WORK' ? 'selected' : ''}>Work</option>
+                                                            <option value="PERSONAL" ${email.kind == 'PERSONAL' ? 'selected' : ''}>Personal</option>
+                                                            <option value="OTHER" ${email.kind == 'OTHER' ? 'selected' : ''}>Other</option>
+                                                        </select>
+                                                    </div>
+                                                    <div class="col-md-2">
+                                                        <label class="form-check-label">
+                                                            <input type="checkbox" name="emails[${email_index}].isPrimary" 
+                                                                   ${email.isPrimary ? 'checked' : ''} class="form-check-input email-primary" onchange="ensureOnePrimaryEmail(this)" /> Primary
+                                                        </label>
+                                                    </div>
+                                                    <div class="col-md-2">
+                                                        <button type="button" class="btn btn-sm btn-danger" onclick="removeEmail(${email_index})">Remove</button>
+                                                    </div>
+                                                </div>
+                                                </#list>
+                                            </div>
+                                            <button type="button" class="btn btn-sm btn-secondary mt-2" onclick="addEmail()">Add Email</button>
+                                            <script>
+                                                let emailIndex = ${emails.size()};
+                                                function addEmail() {
+                                                    const container = document.getElementById('emailList');
+                                                    const newRow = document.createElement('div');
+                                                    newRow.className = 'row mb-2 email-row';
+                                                    newRow.innerHTML = `
+                                                        <div class="col-md-5">
+                                                            <input type="email" name="emails[\${emailIndex}].email" class="form-control" placeholder="email@example.com" required />
+                                                        </div>
+                                                        <div class="col-md-3">
+                                                            <select name="emails[\${emailIndex}].kind" class="form-control" required>
+                                                                <option value="WORK" selected>Work</option>
+                                                                <option value="PERSONAL">Personal</option>
+                                                                <option value="OTHER">Other</option>
+                                                            </select>
+                                                        </div>
+                                                        <div class="col-md-2">
+                                                            <label class="form-check-label">
+                                                                <input type="checkbox" name="emails[\${emailIndex}].isPrimary" class="form-check-input email-primary" onchange="ensureOnePrimaryEmail(this)" /> Primary
+                                                            </label>
+                                                        </div>
+                                                        <div class="col-md-2">
+                                                            <button type="button" class="btn btn-sm btn-danger" onclick="removeEmail(\${emailIndex})">Remove</button>
+                                                        </div>
+                                                    `;
+                                                    container.appendChild(newRow);
+                                                    emailIndex++;
+                                                }
+                                                function removeEmail(index) {
+                                                    const rows = document.querySelectorAll('.email-row');
+                                                    if (rows.length > 1) {
+                                                        rows[index].remove();
+                                                    } else {
+                                                        alert('At least one email is required');
+                                                    }
+                                                }
+                                                function ensureOnePrimaryEmail(checkbox) {
+                                                    if (checkbox.checked) {
+                                                        document.querySelectorAll('.email-primary').forEach(cb => {
+                                                            if (cb !== checkbox) cb.checked = false;
+                                                        });
+                                                    }
+                                                }
+                                            </script>
+                                        ]]>                                            </text>
+                                        </render-mode>
+                                    </container>
+                                </default-field>
+                            </field>
+
+                            <!-- Phone Contact Points -->
+                            <field name="phoneHeader">
+                                <default-field>
+                                    <label text="Phone Numbers" type="h6"/>
+                                </default-field>
+                            </field>
+
+                            <field name="phones">
+                                <default-field>
+                                    <container id="phoneContainer">
+                                        <render-mode>
+                                            <text type="html"><![CDATA[
+                                            <div id="phoneList">
+                                                <#list phones as phone>
+                                                <div class="row mb-2 phone-row">
+                                                    <div class="col-md-4">
+                                                        <input type="tel" name="phones[${phone_index}].phoneNumber" value="${phone.phoneNumber!}" class="form-control" placeholder="1234567890" pattern="[0-9]{10,15}" title="10-15 digits only" required />
+                                                    </div>
+                                                    <div class="col-md-2">
+                                                        <input type="text" name="phones[${phone_index}].extension" value="${phone.extension!}" class="form-control" placeholder="Ext" maxlength="10" />
+                                                    </div>
+                                                    <div class="col-md-2">
+                                                        <select name="phones[${phone_index}].kind" class="form-control" required>
+                                                            <option value="WORK" ${phone.kind == 'WORK' ? 'selected' : ''}>Work</option>
+                                                            <option value="PERSONAL" ${phone.kind == 'PERSONAL' ? 'selected' : ''}>Personal</option>
+                                                            <option value="MOBILE" ${phone.kind == 'MOBILE' ? 'selected' : ''}>Mobile</option>
+                                                            <option value="FAX" ${phone.kind == 'FAX' ? 'selected' : ''}>Fax</option>
+                                                            <option value="OTHER" ${phone.kind == 'OTHER' ? 'selected' : ''}>Other</option>
+                                                        </select>
+                                                    </div>
+                                                    <div class="col-md-2">
+                                                        <label class="form-check-label">
+                                                            <input type="checkbox" name="phones[${phone_index}].isPrimary" 
+                                                                   ${phone.isPrimary ? 'checked' : ''} class="form-check-input phone-primary" onchange="ensureOnePrimaryPhone(this)" /> Primary
+                                                        </label>
+                                                    </div>
+                                                    <div class="col-md-2">
+                                                        <button type="button" class="btn btn-sm btn-danger" onclick="removePhone(${phone_index})">Remove</button>
+                                                    </div>
+                                                </div>
+                                                </#list>
+                                            </div>
+                                            <button type="button" class="btn btn-sm btn-secondary mt-2" onclick="addPhone()">Add Phone</button>
+                                            <script>
+                                                let phoneIndex = ${phones.size()};
+                                                function addPhone() {
+                                                    const container = document.getElementById('phoneList');
+                                                    const newRow = document.createElement('div');
+                                                    newRow.className = 'row mb-2 phone-row';
+                                                    newRow.innerHTML = `
+                                                        <div class="col-md-4">
+                                                            <input type="tel" name="phones[\${phoneIndex}].phoneNumber" class="form-control" placeholder="1234567890" pattern="[0-9]{10,15}" title="10-15 digits only" required />
+                                                        </div>
+                                                        <div class="col-md-2">
+                                                            <input type="text" name="phones[\${phoneIndex}].extension" class="form-control" placeholder="Ext" maxlength="10" />
+                                                        </div>
+                                                        <div class="col-md-2">
+                                                            <select name="phones[\${phoneIndex}].kind" class="form-control" required>
+                                                                <option value="WORK" selected>Work</option>
+                                                                <option value="PERSONAL">Personal</option>
+                                                                <option value="MOBILE">Mobile</option>
+                                                                <option value="FAX">Fax</option>
+                                                                <option value="OTHER">Other</option>
+                                                            </select>
+                                                        </div>
+                                                        <div class="col-md-2">
+                                                            <label class="form-check-label">
+                                                                <input type="checkbox" name="phones[\${phoneIndex}].isPrimary" class="form-check-input phone-primary" onchange="ensureOnePrimaryPhone(this)" /> Primary
+                                                            </label>
+                                                        </div>
+                                                        <div class="col-md-2">
+                                                            <button type="button" class="btn btn-sm btn-danger" onclick="removePhone(\${phoneIndex})">Remove</button>
+                                                        </div>
+                                                    `;
+                                                    container.appendChild(newRow);
+                                                    phoneIndex++;
+                                                }
+                                                function removePhone(index) {
+                                                    const rows = document.querySelectorAll('.phone-row');
+                                                    if (rows.length > 1) {
+                                                        rows[index].remove();
+                                                    } else {
+                                                        alert('At least one phone is required');
+                                                    }
+                                                }
+                                                function ensureOnePrimaryPhone(checkbox) {
+                                                    if (checkbox.checked) {
+                                                        document.querySelectorAll('.phone-primary').forEach(cb => {
+                                                            if (cb !== checkbox) cb.checked = false;
+                                                        });
+                                                    }
+                                                }
+                                            </script>
+                                        ]]>                                            </text>
+                                        </render-mode>
+                                    </container>
+                                </default-field>
+                            </field>
+
+                            <!-- Optional Fields -->
+                            <field name="optionalHeader">
+                                <default-field>
+                                    <label text="Optional Information" type="h6"/>
+                                </default-field>
+                            </field>
+
+                            <field name="externalIdentifierType">
+                                <default-field title="External ID Type">
+                                    <drop-down allow-empty="true">
+                                        <option key="LEGACY_SYSTEM_ID" text="Legacy System ID"/>
+                                        <option key="VENDOR_ID" text="Vendor ID"/>
+                                        <option key="OTHER" text="Other"/>
+                                    </drop-down>
+                                </default-field>
+                            </field>
+
+                            <field name="externalIdentifierValue">
+                                <default-field title="External ID Value">
+                                    <text-line size="50" maxlength="100"/>
+                                </default-field>
+                            </field>
+
+                            <!-- Duplicate Override -->
+                            <section name="DuplicateOverrideSection" condition="duplicateCandidates &amp;&amp; !duplicateCandidates.isEmpty()">
+                                <widgets>
+                                    <field name="overrideHeader">
+                                        <default-field>
+                                            <label text="Duplicate Override" type="h6"/>
+                                        </default-field>
+                                    </field>
+
+                                    <field name="duplicateOverride">
+                                        <default-field title="">
+                                            <check>
+                                                <option key="true" text="I confirm this is not a duplicate"/>
+                                            </check>
+                                        </default-field>
+                                    </field>
+
+                                    <field name="duplicateOverrideJustification">
+                                        <conditional-field condition="duplicateOverride" title="Justification*">
+                                            <text-area rows="3" cols="50" maxlength="500"/>
+                                            <label text="(Required, 5-500 characters)" style="form-text text-muted small"/>
+                                        </conditional-field>
+                                        <default-field>
+                                            <ignored/>
+                                        </default-field>
+                                    </field>
+
+                                    <field name="duplicateCandidatePartyIds">
+                                        <default-field>
+                                            <hidden default-value="${duplicateCandidates*.partyId.join(',')}"/>
+                                        </default-field>
+                                    </field>
+                                </widgets>
+                            </section>
+
+                            <!-- Submit -->
+                            <field name="submitButton">
+                                <default-field title="">
+                                    <submit text="${duplicateCandidates ? 'Confirm and Create Person' : 'Create Person'}"/>
+                                </default-field>
+                            </field>
+
+                        </form-single>
+                    </widgets>
+                </section>
+
+            </box-body>
+        </container-box>
+    </widgets>
+</screen>

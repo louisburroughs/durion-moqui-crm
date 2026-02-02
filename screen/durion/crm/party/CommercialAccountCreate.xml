@@ -1,0 +1,270 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<screen xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://moqui.org/xsd/xml-screen-3.xsd" default-menu-title="Create Commercial Account" default-menu-index="1">
+
+    <transition name="createCommercialAccount">
+        <service-call name="durion.crm.PartyServices.create#CommercialAccount"/>
+        <conditional-response url="../PartyDetail">
+            <condition>
+                <expression>partyId</expression>
+            </condition>
+        </conditional-response>
+        <default-response url="."/>
+    </transition>
+
+    <transition name="checkDuplicates">
+        <service-call name="durion.crm.PartyServices.check#DuplicateParties"/>
+        <default-response type="json"/>
+    </transition>
+
+    <transition name="partyDetail">
+        <default-response url="../PartyDetail"/>
+    </transition>
+
+    <transition name="billingTermsList">
+        <service-call name="durion.crm.PartyServices.list#BillingTerms"/>
+        <default-response type="json"/>
+    </transition>
+
+    <actions>
+        <!-- Load billing terms for dropdown -->
+        <service-call name="durion.crm.PartyServices.list#BillingTerms" out-map="billingTermsResult"/>
+        <set field="billingTermsList" from="billingTermsResult?.items ?: []"/>
+
+        <!-- Check for duplicate candidates from previous attempt -->
+        <set field="duplicateCandidates" from="ec.web.parameters.duplicateCandidates"/>
+        <set field="showDuplicates" from="duplicateCandidates != null &amp;&amp; !duplicateCandidates.isEmpty()"/>
+    </actions>
+
+    <widgets>
+        <container-box>
+            <box-header title="Create Commercial Account"/>
+            <box-body>
+                <!-- Access Denied State -->
+                <section name="AccessDeniedSection">
+                    <condition>
+                        <expression>ec.message.hasError() &amp;&amp; ec.message.getErrors().any { it.contains('403') || it.contains('Forbidden') }</expression>
+                    </condition>
+                    <widgets>
+                        <container style="alert alert-danger">
+                            <label text="Access Denied" type="h4"/>
+                            <label text="You don't have permission to create commercial accounts. Please contact your administrator."/>
+                            <link url="../PartyFind" text="Return to Party Search" btn-type="default"/>
+                        </container>
+                    </widgets>
+                </section>
+
+                <!-- Main Form Section -->
+                <section name="MainFormSection">
+                    <condition>
+                        <expression>!ec.message.hasError() || !ec.message.getErrors().any { it.contains('403') || it.contains('Forbidden') }</expression>
+                    </condition>
+                    <widgets>
+                        <!-- Error Banner for 5xx and Other Errors -->
+                        <section name="ErrorBannerSection">
+                            <condition>
+                                <expression>ec.message.hasError()</expression>
+                            </condition>
+                            <widgets>
+                                <container style="alert alert-danger">
+                                    <label text="Unable to create account" type="h5"/>
+                                    <render-mode>
+                                        <text type="html"><![CDATA[
+                                            <ul>
+                                                <#list ec.message.errors as error>
+                                                    <li>${error?html}</li>
+                                                </#list>
+                                            </ul>
+                                            <#if ec.web.parameters.correlationId?has_content>
+                                                <p class="text-muted"><small>Correlation ID: ${ec.web.parameters.correlationId}</small></p>
+                                            </#if>
+                                        ]]>                                        </text>
+                                    </render-mode>
+                                </container>
+                            </widgets>
+                        </section>
+
+                        <!-- Duplicate Candidates Panel -->
+                        <section name="DuplicatesPanel">
+                            <condition>
+                                <expression>showDuplicates</expression>
+                            </condition>
+                            <widgets>
+                                <container style="alert alert-warning">
+                                    <label text="Potential Duplicate Accounts Found" type="h5"/>
+                                    <label text="The following accounts may be duplicates. Please review before proceeding."/>
+
+                                    <form-list name="DuplicateCandidatesList" list="duplicateCandidates" skip-form="true">
+                                        <field name="partyId">
+                                            <default-field title="Party ID">
+                                                <link url="partyDetail" text="${partyId}" parameter-map="[partyId: partyId]" target-window="_blank"/>
+                                            </default-field>
+                                        </field>
+                                        <field name="legalName">
+                                            <default-field title="Legal Name">
+                                                <display/>
+                                            </default-field>
+                                        </field>
+                                        <field name="dbaName">
+                                            <default-field title="DBA">
+                                                <display/>
+                                            </default-field>
+                                        </field>
+                                        <field name="matchReason">
+                                            <default-field title="Match Reason">
+                                                <display/>
+                                            </default-field>
+                                        </field>
+                                        <field name="openCandidate">
+                                            <default-field title="">
+                                                <link url="partyDetail" text="Open" parameter-map="[partyId: partyId]" target-window="_blank" btn-type="info"/>
+                                            </default-field>
+                                        </field>
+                                    </form-list>
+
+                                    <label text="If you want to proceed with creating a new account despite these matches:" style="font-weight: bold; margin-top: 15px;"/>
+                                </container>
+                            </widgets>
+                        </section>
+
+                        <!-- Create Form -->
+                        <form-single name="CreateCommercialAccount" transition="createCommercialAccount">
+                            <!-- Legal Name (Required) -->
+                            <field name="legalName">
+                                <default-field title="Legal Name" required="true" tooltip="The registered legal name of the business">
+                                    <text-line size="60" maxlength="255"/>
+                                </default-field>
+                            </field>
+
+                            <!-- DBA Name (Optional) -->
+                            <field name="dbaName">
+                                <default-field title="DBA / Doing Business As" tooltip="Trade name or DBA if different from legal name">
+                                    <text-line size="60" maxlength="255"/>
+                                </default-field>
+                            </field>
+
+                            <!-- Tax ID (Optional) -->
+                            <field name="taxId">
+                                <default-field title="Tax ID / EIN" tooltip="Federal Tax ID or Employer Identification Number">
+                                    <text-line size="30" maxlength="50"/>
+                                </default-field>
+                            </field>
+
+                            <!-- Default Billing Terms (Required) -->
+                            <field name="defaultBillingTermsId">
+                                <default-field title="Default Billing Terms" required="true" tooltip="Select the default billing terms for this account">
+                                    <drop-down allow-empty="false">
+                                        <list-options list="billingTermsList" key="${billingTermsId}" text="${description} (${code ?: 'N/A'})"/>
+                                    </drop-down>
+                                </default-field>
+                            </field>
+
+                            <!-- External Identifiers Section (Optional, Conditional) -->
+                            <field name="externalIdentifierType">
+                                <default-field title="External System ID Type" tooltip="Optional: External system identifier type">
+                                    <drop-down allow-empty="true">
+                                        <option key="QUICKBOOKS" text="QuickBooks"/>
+                                        <option key="SAGE" text="Sage"/>
+                                        <option key="SAP" text="SAP"/>
+                                        <option key="ORACLE" text="Oracle"/>
+                                        <option key="OTHER" text="Other"/>
+                                    </drop-down>
+                                </default-field>
+                            </field>
+
+                            <field name="externalIdentifierValue">
+                                <default-field title="External System ID Value">
+                                    <text-line size="40" maxlength="100"/>
+                                </default-field>
+                            </field>
+
+                            <!-- Duplicate Override Section (Shown only when duplicates exist) -->
+                            <field name="duplicateOverride">
+                                <conditional-field condition="showDuplicates" title="">
+                                    <check>
+                                        <option key="true" text="I understand this may create a duplicate account"/>
+                                    </check>
+                                </conditional-field>
+                                <default-field>
+                                    <hidden default-value="false"/>
+                                </default-field>
+                            </field>
+
+                            <field name="duplicateOverrideJustification">
+                                <conditional-field condition="showDuplicates" title="Justification" required="true" tooltip="Required: Explain why you are creating this account despite potential duplicates">
+                                    <text-area rows="3" cols="60" maxlength="500"/>
+                                </conditional-field>
+                                <default-field>
+                                    <hidden/>
+                                </default-field>
+                            </field>
+
+                            <!-- Hidden field to pass duplicate candidate IDs for audit -->
+                            <field name="duplicateCandidatePartyIds">
+                                <default-field>
+                                    <hidden default-value="${duplicateCandidates?.collect { it.partyId }?.join(',')}"/>
+                                </default-field>
+                            </field>
+
+                            <!-- Action Buttons -->
+                            <field name="cancelButton">
+                                <default-field title="">
+                                    <link url="../PartyFind" text="Cancel" btn-type="default"/>
+                                </default-field>
+                            </field>
+
+                            <field name="submitButton">
+                                <conditional-field condition="showDuplicates" title="Create Anyway">
+                                    <submit/>
+                                </conditional-field>
+                                <default-field title="Create Commercial Account">
+                                    <submit/>
+                                </default-field>
+                            </field>
+                        </form-single>
+
+                        <!-- Success Confirmation Section -->
+                        <section name="SuccessSection">
+                            <condition>
+                                <expression>partyId != null &amp;&amp; !ec.message.hasError()</expression>
+                            </condition>
+                            <widgets>
+                                <container style="alert alert-success">
+                                    <label text="Commercial Account Created Successfully!" type="h4"/>
+                                    <render-mode>
+                                        <text type="html"><![CDATA[
+                                            <p><strong>Party ID:</strong> ${partyId}</p>
+                                            <button class="btn btn-sm btn-default" onclick="navigator.clipboard.writeText('${partyId}'); alert('Party ID copied to clipboard');">
+                                                Copy Party ID
+                                            </button>
+                                            <#if createdAt?has_content>
+                                                <p><small>Created: ${createdAt?datetime?iso_local}</small></p>
+                                            </#if>
+                                            <#if createdBy?has_content>
+                                                <p><small>Created By: ${createdBy}</small></p>
+                                            </#if>
+                                        ]]>                                        </text>
+                                    </render-mode>
+                                    <link url="partyDetail" text="View Account Details" parameter-map="[partyId: partyId]" btn-type="primary"/>
+                                    <link url="." text="Create Another Account" btn-type="default"/>
+                                </container>
+                            </widgets>
+                        </section>
+
+                        <!-- Helper Text -->
+                        <container style="text-muted">
+                            <render-mode>
+                                <text type="html"><![CDATA[
+                                    <small>
+                                        <strong>Note:</strong> Before creating a new account, a duplicate check will be performed 
+                                        based on legal name and tax ID. If potential duplicates are found, you will be required 
+                                        to provide justification to proceed.
+                                    </small>
+                                ]]>                                </text>
+                            </render-mode>
+                        </container>
+                    </widgets>
+                </section>
+            </box-body>
+        </container-box>
+    </widgets>
+</screen>

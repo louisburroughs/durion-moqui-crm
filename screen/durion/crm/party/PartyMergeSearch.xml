@@ -1,0 +1,259 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<screen xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://moqui.org/xsd/xml-screen-3.xsd" default-menu-title="Merge Parties - Search" default-menu-index="4">
+
+    <parameter name="correlationId"/>
+
+    <transition name="confirmMerge">
+        <default-response url="../PartyMergeConfirm"/>
+    </transition>
+
+    <transition name="PartyDetail">
+        <default-response url="../PartyDetail"/>
+    </transition>
+
+    <transition name="PartyFind">
+        <default-response url="../PartyFind"/>
+    </transition>
+
+    <transition name="search">
+        <service-call name="durion.crm.PartyServices.search#Parties"/>
+        <default-response url="."/>
+    </transition>
+
+    <actions>
+        <!-- Track selected parties for merge -->
+        <set field="selectedPartyIds" from="selectedPartyIds ?: []"/>
+        <set field="searchResults" from="searchResults ?: []"/>
+
+        <!-- Check permissions -->
+        <set field="canMerge" from="ec.user.hasPermission('crm:party:merge')"/>
+    </actions>
+
+    <widgets>
+        <container-box>
+            <box-header title="Search and Select Parties to Merge"/>
+            <box-toolbar>
+                <link url="PartyFind" text="Back to Party Search"/>
+            </box-toolbar>
+            <box-body>
+
+                <!-- Permission Denied -->
+                <section name="PermissionDeniedSection" condition="!canMerge">
+                    <widgets>
+                        <container style="alert alert-danger">
+                            <label text="Access Denied" type="h5"/>
+                            <label text="You do not have permission to merge parties. Required permission: crm:party:merge"/>
+                        </container>
+                    </widgets>
+                </section>
+
+                <!-- Error State -->
+                <section name="ErrorSection" condition="ec.message.hasError()">
+                    <widgets>
+                        <container style="alert alert-danger">
+                            <label text="Error" type="h5"/>
+                            <render-mode>
+                                <text type="html" location="component://webroot/screen/webroot/MessageText.html.ftl"/>
+                            </render-mode>
+                            <section name="CorrelationIdSection" condition="correlationId">
+                                <widgets>
+                                    <label text="Correlation ID: ${correlationId}" style="text-muted small"/>
+                                </widgets>
+                            </section>
+                        </container>
+                    </widgets>
+                </section>
+
+                <section name="MainSection" condition="canMerge">
+                    <widgets>
+
+                        <!-- Instructions -->
+                        <container style="alert alert-info mb-4">
+                            <label text="Party Merge Process" type="h6"/>
+                            <label text="Step 1 of 3: Search and select exactly TWO parties to merge"/>
+                            <ul>
+                                <li>
+                                    <label text="Use the search form below to find duplicate parties"/>
+                                </li>
+                                <li>
+                                    <label text="Select exactly two parties using checkboxes"/>
+                                </li>
+                                <li>
+                                    <label text="Click 'Proceed to Confirm Merge' to continue"/>
+                                </li>
+                            </ul>
+                        </container>
+
+                        <!-- Search Form -->
+                        <container-box>
+                            <box-header title="Search for Parties"/>
+                            <box-body>
+                                <form-single name="SearchForm" transition="search">
+
+                                    <field name="name">
+                                        <default-field title="Name">
+                                            <text-line size="50"/>
+                                        </default-field>
+                                    </field>
+
+                                    <field name="email">
+                                        <default-field title="Email">
+                                            <text-line size="50"/>
+                                        </default-field>
+                                    </field>
+
+                                    <field name="phone">
+                                        <default-field title="Phone">
+                                            <text-line size="50"/>
+                                        </default-field>
+                                    </field>
+
+                                    <field name="taxId">
+                                        <default-field title="Tax ID">
+                                            <text-line size="50"/>
+                                        </default-field>
+                                    </field>
+
+                                    <field name="partyType">
+                                        <default-field title="Party Type">
+                                            <drop-down allow-empty="true">
+                                                <option key="ORGANIZATION" text="Commercial Account"/>
+                                                <option key="PERSON" text="Individual Person"/>
+                                            </drop-down>
+                                        </default-field>
+                                    </field>
+
+                                    <field name="status">
+                                        <default-field title="Status">
+                                            <drop-down allow-empty="true">
+                                                <option key="ACTIVE" text="Active"/>
+                                                <option key="INACTIVE" text="Inactive"/>
+                                            </drop-down>
+                                        </default-field>
+                                    </field>
+
+                                    <field name="submitButton">
+                                        <default-field title="">
+                                            <submit text="Search"/>
+                                        </default-field>
+                                    </field>
+
+                                </form-single>
+                            </box-body>
+                        </container-box>
+
+                        <!-- Selection Status -->
+                        <section name="SelectionStatus" condition="selectedPartyIds">
+                            <widgets>
+                                <container style="alert ${selectedPartyIds.size() == 2 ? 'alert-success' : 'alert-warning'} mt-3">
+                                    <label text="Selected: ${selectedPartyIds.size()} of 2 required parties"/>
+                                    <section name="ProceedSection" condition="selectedPartyIds.size() == 2">
+                                        <widgets>
+                                            <container style="mt-2">
+                                                <form-single name="ProceedForm" transition="confirmMerge">
+                                                    <field name="partyId1">
+                                                        <default-field>
+                                                            <hidden default-value="${selectedPartyIds[0]}"/>
+                                                        </default-field>
+                                                    </field>
+                                                    <field name="partyId2">
+                                                        <default-field>
+                                                            <hidden default-value="${selectedPartyIds[1]}"/>
+                                                        </default-field>
+                                                    </field>
+                                                    <field name="submitButton">
+                                                        <default-field title="">
+                                                            <submit text="Proceed to Confirm Merge" style="btn-primary"/>
+                                                        </default-field>
+                                                    </field>
+                                                </form-single>
+                                            </container>
+                                        </widgets>
+                                    </section>
+                                </container>
+                            </widgets>
+                        </section>
+
+                        <!-- Search Results -->
+                        <section name="ResultsSection" condition="searchResults">
+                            <widgets>
+                                <container-box>
+                                    <box-header title="Search Results"/>
+                                    <box-body>
+
+                                        <section name="NoResults" condition="searchResults.isEmpty()">
+                                            <widgets>
+                                                <container style="alert alert-info">
+                                                    <label text="No parties found matching your search criteria."/>
+                                                </container>
+                                            </widgets>
+                                        </section>
+
+                                        <section name="ResultsList" condition="!searchResults.isEmpty()">
+                                            <widgets>
+                                                <form-list name="ResultsList" list="searchResults" skip-form="true">
+
+                                                    <field name="select">
+                                                        <default-field title="">
+                                                            <check all-checked="false">
+                                                                <option key="${partyId}" text=""/>
+                                                            </check>
+                                                        </default-field>
+                                                    </field>
+
+                                                    <field name="partyId">
+                                                        <default-field title="Party ID">
+                                                            <link url="PartyDetail" text="${partyId}" link-type="anchor">
+                                                                <parameter name="partyId"/>
+                                                            </link>
+                                                        </default-field>
+                                                    </field>
+
+                                                    <field name="name">
+                                                        <default-field title="Name">
+                                                            <display text="${legalName ?: fullName}"/>
+                                                        </default-field>
+                                                    </field>
+
+                                                    <field name="partyType">
+                                                        <default-field title="Type">
+                                                            <display text="${partyType == 'ORGANIZATION' ? 'Commercial Account' : 'Person'}"/>
+                                                        </default-field>
+                                                    </field>
+
+                                                    <field name="contactInfo">
+                                                        <default-field title="Contact">
+                                                            <display text="${primaryEmail ?: ''} ${primaryPhone ? '(' + primaryPhone + ')' : ''}"/>
+                                                        </default-field>
+                                                    </field>
+
+                                                    <field name="status">
+                                                        <default-field>
+                                                            <display/>
+                                                        </default-field>
+                                                    </field>
+
+                                                    <field name="createdAt">
+                                                        <default-field title="Created">
+                                                            <display text="${ec.l10n.format(createdAt, 'yyyy-MM-dd')}"/>
+                                                        </default-field>
+                                                    </field>
+
+                                                </form-list>
+
+                                                <label text="Select exactly two parties above and click 'Proceed to Confirm Merge'" style="text-muted mt-2"/>
+                                            </widgets>
+                                        </section>
+
+                                    </box-body>
+                                </container-box>
+                            </widgets>
+                        </section>
+
+                    </widgets>
+                </section>
+
+            </box-body>
+        </container-box>
+    </widgets>
+</screen>

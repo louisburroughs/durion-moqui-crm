@@ -1,0 +1,196 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<screen xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://moqui.org/xsd/xml-screen-3.xsd" default-menu-title="Find Parties" default-menu-index="1">
+
+    <transition name="partyDetail">
+        <default-response url="PartyDetail"/>
+    </transition>
+
+    <transition name="createCommercialAccount">
+        <default-response url="CommercialAccountCreate"/>
+    </transition>
+
+    <transition name="createPerson">
+        <default-response url="PersonCreate"/>
+    </transition>
+
+    <transition name="searchParties">
+        <service-call name="durion.crm.PartyServices.search#Parties"/>
+        <default-response url="."/>
+    </transition>
+
+    <actions>
+        <!-- Execute search if criteria provided -->
+        <if condition="ec.web.parameters.name || ec.web.parameters.email || ec.web.parameters.phone || ec.web.parameters.taxId">
+            <service-call name="durion.crm.PartyServices.search#Parties" in-map="context" out-map="searchResult"/>
+            <set field="partyList" from="searchResult?.results ?: []"/>
+            <set field="totalCount" from="searchResult?.totalCount ?: 0"/>
+            <set field="showResults" value="true"/>
+        </if>
+    </actions>
+
+    <widgets>
+        <container-box>
+            <box-header title="Party Search"/>
+            <box-body>
+                <!-- Action Buttons -->
+                <container style="margin-bottom: 15px;">
+                    <link url="createCommercialAccount" text="Create Commercial Account" btn-type="primary"/>
+                    <link url="createPerson" text="Create Individual Person" btn-type="info"/>
+                </container>
+
+                <!-- Search Form -->
+                <form-single name="SearchParties" transition="searchParties">
+                    <field name="name">
+                        <default-field title="Name" tooltip="Search by legal name or display name">
+                            <text-line size="40"/>
+                        </default-field>
+                    </field>
+
+                    <field name="email">
+                        <default-field title="Email" tooltip="Search by email address">
+                            <text-line size="40"/>
+                        </default-field>
+                    </field>
+
+                    <field name="phone">
+                        <default-field title="Phone" tooltip="Search by phone number">
+                            <text-line size="30"/>
+                        </default-field>
+                    </field>
+
+                    <field name="taxId">
+                        <default-field title="Tax ID" tooltip="Search by tax ID or EIN">
+                            <text-line size="30"/>
+                        </default-field>
+                    </field>
+
+                    <field name="partyType">
+                        <default-field title="Party Type">
+                            <drop-down allow-empty="true">
+                                <option key="ORGANIZATION" text="Commercial Account / Organization"/>
+                                <option key="INDIVIDUAL" text="Individual Person"/>
+                            </drop-down>
+                        </default-field>
+                    </field>
+
+                    <field name="status">
+                        <default-field title="Status">
+                            <drop-down allow-empty="true">
+                                <option key="ACTIVE" text="Active"/>
+                                <option key="PENDING" text="Pending"/>
+                                <option key="SUSPENDED" text="Suspended"/>
+                                <option key="INACTIVE" text="Inactive"/>
+                            </drop-down>
+                        </default-field>
+                    </field>
+
+                    <field name="pageSize">
+                        <default-field title="Results Per Page">
+                            <drop-down no-current-selected-key="20">
+                                <option key="10" text="10"/>
+                                <option key="20" text="20"/>
+                                <option key="50" text="50"/>
+                                <option key="100" text="100"/>
+                            </drop-down>
+                        </default-field>
+                    </field>
+
+                    <field name="submitButton">
+                        <default-field title="Search">
+                            <submit/>
+                        </default-field>
+                    </field>
+                </form-single>
+
+                <!-- Search Results -->
+                <section name="ResultsSection">
+                    <condition>
+                        <expression>showResults</expression>
+                    </condition>
+                    <widgets>
+                        <!-- No Results Message -->
+                        <section name="NoResultsSection">
+                            <condition>
+                                <expression>partyList == null || partyList.isEmpty()</expression>
+                            </condition>
+                            <widgets>
+                                <container style="alert alert-info">
+                                    <label text="No parties found matching your search criteria."/>
+                                    <label text="Try adjusting your search or create a new party using the buttons above."/>
+                                </container>
+                            </widgets>
+                        </section>
+
+                        <!-- Results List -->
+                        <section name="ResultsListSection">
+                            <condition>
+                                <expression>partyList != null &amp;&amp; !partyList.isEmpty()</expression>
+                            </condition>
+                            <widgets>
+                                <container style="margin-top: 15px;">
+                                    <label text="Found ${totalCount} parties" type="p"/>
+                                </container>
+
+                                <form-list name="PartyList" list="partyList" skip-form="true">
+                                    <field name="partyId">
+                                        <default-field title="Party ID">
+                                            <link url="partyDetail" text="${partyId}" parameter-map="[partyId: partyId]"/>
+                                        </default-field>
+                                    </field>
+
+                                    <field name="partyType">
+                                        <default-field title="Type">
+                                            <display/>
+                                        </default-field>
+                                    </field>
+
+                                    <field name="legalName">
+                                        <default-field title="Legal Name">
+                                            <display/>
+                                        </default-field>
+                                    </field>
+
+                                    <field name="displayName">
+                                        <default-field title="Display Name">
+                                            <display/>
+                                        </default-field>
+                                    </field>
+
+                                    <field name="status">
+                                        <default-field title="Status">
+                                            <display/>
+                                        </default-field>
+                                    </field>
+
+                                    <field name="createdAt">
+                                        <default-field title="Created">
+                                            <display format="yyyy-MM-dd"/>
+                                        </default-field>
+                                    </field>
+
+                                    <field name="actions">
+                                        <default-field title="">
+                                            <link url="partyDetail" text="View" parameter-map="[partyId: partyId]" btn-type="info"/>
+                                        </default-field>
+                                    </field>
+                                </form-list>
+                            </widgets>
+                        </section>
+                    </widgets>
+                </section>
+
+                <!-- Helper Text -->
+                <container style="text-muted margin-top: 15px;">
+                    <render-mode>
+                        <text type="html"><![CDATA[
+                            <small>
+                                <strong>Note:</strong> At least one search criterion is required. 
+                                Merged parties are excluded from search results by default.
+                            </small>
+                        ]]>                        </text>
+                    </render-mode>
+                </container>
+            </box-body>
+        </container-box>
+    </widgets>
+</screen>

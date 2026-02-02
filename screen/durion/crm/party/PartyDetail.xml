@@ -1,0 +1,168 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<screen xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://moqui.org/xsd/xml-screen-3.xsd" default-menu-title="Party Detail" default-menu-index="2">
+
+    <parameter name="partyId" required="true"/>
+
+    <transition name="updateParty">
+        <service-call name="durion.crm.PartyServices.update#Party"/>
+        <default-response url="."/>
+    </transition>
+
+    <transition name="partyList">
+        <default-response url="../PartyFind"/>
+    </transition>
+
+    <actions>
+        <!-- Get party details from backend -->
+        <service-call name="durion.crm.PartyServices.get#Party" in-map="[partyId: partyId]" out-map="partyResult"/>
+        <set field="party" from="partyResult?.party"/>
+
+        <!-- Handle 409 PARTY_MERGED error -->
+        <if condition="partyResult?.errorCode == 'PARTY_MERGED'">
+            <set field="mergedToPartyId" from="partyResult?.mergedToPartyId"/>
+            <set field="showMergedRedirect" value="true"/>
+        </if>
+
+        <!-- Handle 404 NOT_FOUND error -->
+        <if condition="partyResult?.errorCode == 'NOT_FOUND'">
+            <set field="showNotFound" value="true"/>
+        </if>
+
+        <!-- Handle 403 FORBIDDEN error -->
+        <if condition="partyResult?.errorCode == 'FORBIDDEN'">
+            <set field="showForbidden" value="true"/>
+        </if>
+    </actions>
+
+    <widgets>
+        <container-box>
+            <box-header title="Party: ${party?.legalName ?: party?.displayName ?: partyId}"/>
+            <box-body>
+                <!-- Merged Party Redirect Section -->
+                <section name="MergedPartySection">
+                    <condition>
+                        <expression>showMergedRedirect</expression>
+                    </condition>
+                    <widgets>
+                        <container style="alert alert-warning">
+                            <label text="This Party Has Been Merged" type="h4"/>
+                            <label text="This party record has been merged into another party."/>
+                            <render-mode>
+                                <text type="html"><![CDATA[
+                                    <p><strong>Original Party ID:</strong> ${partyId}</p>
+                                    <p><strong>Merged To Party ID:</strong> ${mergedToPartyId}</p>
+                                ]]>                                </text>
+                            </render-mode>
+                            <link url="." text="View Current Party" parameter-map="[partyId: mergedToPartyId]" btn-type="primary"/>
+                            <link url="partyList" text="Back to Party Search" btn-type="default"/>
+                        </container>
+                    </widgets>
+                </section>
+
+                <!-- Not Found Section -->
+                <section name="NotFoundSection">
+                    <condition>
+                        <expression>showNotFound</expression>
+                    </condition>
+                    <widgets>
+                        <container style="alert alert-danger">
+                            <label text="Party Not Found" type="h4"/>
+                            <label text="The party you are looking for does not exist or has been deleted."/>
+                            <link url="partyList" text="Return to Party Search" btn-type="default"/>
+                        </container>
+                    </widgets>
+                </section>
+
+                <!-- Access Denied Section -->
+                <section name="ForbiddenSection">
+                    <condition>
+                        <expression>showForbidden</expression>
+                    </condition>
+                    <widgets>
+                        <container style="alert alert-danger">
+                            <label text="Access Denied" type="h4"/>
+                            <label text="You don't have permission to view this party."/>
+                            <link url="partyList" text="Return to Party Search" btn-type="default"/>
+                        </container>
+                    </widgets>
+                </section>
+
+                <!-- Party Details Section -->
+                <section name="PartyDetailsSection">
+                    <condition>
+                        <expression>party != null</expression>
+                    </condition>
+                    <widgets>
+                        <form-single name="PartyDetails" map="party">
+                            <field name="partyId">
+                                <default-field title="Party ID">
+                                    <display text="${partyId}"/>
+                                    <render-mode>
+                                        <text type="html"><![CDATA[
+                                            <button class="btn btn-xs btn-default" onclick="navigator.clipboard.writeText('${partyId}'); alert('Party ID copied');">
+                                                Copy
+                                            </button>
+                                        ]]>                                        </text>
+                                    </render-mode>
+                                </default-field>
+                            </field>
+
+                            <field name="partyType">
+                                <default-field title="Type">
+                                    <display/>
+                                </default-field>
+                            </field>
+
+                            <field name="legalName">
+                                <default-field title="Legal Name">
+                                    <display/>
+                                </default-field>
+                            </field>
+
+                            <field name="displayName">
+                                <default-field title="Display Name">
+                                    <display/>
+                                </default-field>
+                            </field>
+
+                            <field name="taxId">
+                                <default-field title="Tax ID">
+                                    <display/>
+                                </default-field>
+                            </field>
+
+                            <field name="status">
+                                <default-field title="Status">
+                                    <display/>
+                                </default-field>
+                            </field>
+
+                            <field name="billingTermsId">
+                                <default-field title="Default Billing Terms">
+                                    <display/>
+                                </default-field>
+                            </field>
+
+                            <field name="createdAt">
+                                <default-field title="Created">
+                                    <display format="yyyy-MM-dd HH:mm:ss"/>
+                                </default-field>
+                            </field>
+
+                            <field name="modifiedAt">
+                                <default-field title="Last Modified">
+                                    <display format="yyyy-MM-dd HH:mm:ss"/>
+                                </default-field>
+                            </field>
+                        </form-single>
+
+                        <!-- Action Buttons -->
+                        <container>
+                            <link url="partyList" text="Back to Search" btn-type="default"/>
+                        </container>
+                    </widgets>
+                </section>
+            </box-body>
+        </container-box>
+    </widgets>
+</screen>

@@ -1,0 +1,219 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<services xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://moqui.org/xsd/service-definition-3.xsd">
+
+    <!-- Party Create Services -->
+
+    <service verb="create" noun="CommercialAccount" type="script" location="component://durion-crm/script/groovy/PartyServices.groovy#createCommercialAccount">
+        <description>
+            Create a new commercial account (Party with subtype Organization).
+            Calls backend /v1/crm/accounts/parties endpoint via durion-positivity bridge.
+            Handles duplicate detection and override flow.
+        </description>
+        <in-parameters>
+            <parameter name="legalName" required="true"/>
+            <parameter name="dbaName"/>
+            <parameter name="taxId"/>
+            <parameter name="defaultBillingTermsId" required="true"/>
+            <parameter name="externalIdentifierType"/>
+            <parameter name="externalIdentifierValue"/>
+            <parameter name="duplicateOverride" type="Boolean" default="false"/>
+            <parameter name="duplicateOverrideJustification"/>
+            <parameter name="duplicateCandidatePartyIds"/>
+        </in-parameters>
+        <out-parameters>
+            <parameter name="partyId"/>
+            <parameter name="createdAt"/>
+            <parameter name="createdBy"/>
+            <parameter name="duplicateCandidates" type="List"/>
+        </out-parameters>
+    </service>
+
+    <service verb="create" noun="Person" type="script" location="component://durion-crm/script/groovy/PartyServices.groovy#createPerson">
+        <description>
+            Create a new individual person (Party with subtype Person).
+            Includes contact points (emails and phones) with primary flags.
+        </description>
+        <in-parameters>
+            <parameter name="firstName" required="true"/>
+            <parameter name="lastName" required="true"/>
+            <parameter name="preferredContactMethod" required="true"/>
+            <parameter name="contactPoints" type="List"/>
+        </in-parameters>
+        <out-parameters>
+            <parameter name="partyId"/>
+            <parameter name="createdAt"/>
+            <parameter name="createdBy"/>
+        </out-parameters>
+    </service>
+
+    <!-- Party Read Services -->
+
+    <service verb="get" noun="Party" type="script" location="component://durion-crm/script/groovy/PartyServices.groovy#getParty">
+        <description>
+            Get party details by partyId.
+            Handles 409 PARTY_MERGED errors and returns mergedToPartyId.
+        </description>
+        <in-parameters>
+            <parameter name="partyId" required="true"/>
+        </in-parameters>
+        <out-parameters>
+            <parameter name="party" type="Map"/>
+            <parameter name="errorCode"/>
+            <parameter name="mergedToPartyId"/>
+        </out-parameters>
+    </service>
+
+    <service verb="search" noun="Parties" type="script" location="component://durion-crm/script/groovy/PartyServices.groovy#searchParties">
+        <description>
+            Search parties by name, email, phone, or tax ID.
+            At least one search criterion is required (no browse-all).
+        </description>
+        <in-parameters>
+            <parameter name="name"/>
+            <parameter name="email"/>
+            <parameter name="phone"/>
+            <parameter name="taxId"/>
+            <parameter name="partyType"/>
+            <parameter name="status"/>
+            <parameter name="includeMerged" type="Boolean" default="false"/>
+            <parameter name="pageNumber" type="Integer" default="1"/>
+            <parameter name="pageSize" type="Integer" default="20"/>
+            <parameter name="sortField" default="legalName"/>
+            <parameter name="sortOrder" default="ASC"/>
+        </in-parameters>
+        <out-parameters>
+            <parameter name="results" type="List"/>
+            <parameter name="totalCount" type="Integer"/>
+            <parameter name="pageNumber" type="Integer"/>
+            <parameter name="pageSize" type="Integer"/>
+        </out-parameters>
+    </service>
+
+    <service verb="check" noun="DuplicateParties" type="script" location="component://durion-crm/script/groovy/PartyServices.groovy#checkDuplicateParties">
+        <description>
+            Check for duplicate parties before creating a new party.
+            Used in create flow to show potential matches.
+        </description>
+        <in-parameters>
+            <parameter name="legalName"/>
+            <parameter name="taxId"/>
+            <parameter name="externalIdentifiers" type="Map"/>
+        </in-parameters>
+        <out-parameters>
+            <parameter name="candidates" type="List"/>
+        </out-parameters>
+    </service>
+
+    <!-- Party Update Services -->
+
+    <service verb="update" noun="Party" type="script" location="component://durion-crm/script/groovy/PartyServices.groovy#updateParty">
+        <description>Update party details</description>
+        <in-parameters>
+            <parameter name="partyId" required="true"/>
+            <parameter name="legalName"/>
+            <parameter name="displayName"/>
+            <parameter name="taxId"/>
+        </in-parameters>
+        <out-parameters>
+            <parameter name="success" type="Boolean"/>
+        </out-parameters>
+    </service>
+
+    <!-- Party Relationship Services -->
+
+    <service verb="create" noun="PartyRelationship" type="script" location="component://durion-crm/script/groovy/PartyServices.groovy#createPartyRelationship">
+        <description>
+            Create a relationship between a commercial account and an individual person.
+            Supports roles: APPROVER, BILLING.
+        </description>
+        <in-parameters>
+            <parameter name="accountPartyId" required="true"/>
+            <parameter name="personPartyId" required="true"/>
+            <parameter name="roleType" required="true"/>
+            <parameter name="effectiveStartDate" type="Date" required="true"/>
+            <parameter name="setPrimaryBilling" type="Boolean" default="false"/>
+        </in-parameters>
+        <out-parameters>
+            <parameter name="partyRelationshipId"/>
+        </out-parameters>
+    </service>
+
+    <service verb="list" noun="PartyRelationships" type="script" location="component://durion-crm/script/groovy/PartyServices.groovy#listPartyRelationships">
+        <description>List relationships for a party with filtering</description>
+        <in-parameters>
+            <parameter name="accountPartyId" required="true"/>
+            <parameter name="roles" type="List"/>
+            <parameter name="status" default="ACTIVE"/>
+            <parameter name="pageIndex" type="Integer" default="0"/>
+            <parameter name="pageSize" type="Integer" default="25"/>
+        </in-parameters>
+        <out-parameters>
+            <parameter name="items" type="List"/>
+            <parameter name="pageIndex" type="Integer"/>
+            <parameter name="pageSize" type="Integer"/>
+            <parameter name="total" type="Integer"/>
+        </out-parameters>
+    </service>
+
+    <service verb="setPrimaryBilling" noun="Contact" type="script" location="component://durion-crm/script/groovy/PartyServices.groovy#setPrimaryBillingContact">
+        <description>
+            Set a relationship as the primary billing contact.
+            Backend automatically demotes any existing primary.
+        </description>
+        <in-parameters>
+            <parameter name="accountPartyId" required="true"/>
+            <parameter name="partyRelationshipId" required="true"/>
+        </in-parameters>
+        <out-parameters>
+            <parameter name="success" type="Boolean"/>
+        </out-parameters>
+    </service>
+
+    <service verb="deactivate" noun="PartyRelationship" type="script" location="component://durion-crm/script/groovy/PartyServices.groovy#deactivatePartyRelationship">
+        <description>Deactivate a party relationship by setting effectiveEndDate</description>
+        <in-parameters>
+            <parameter name="partyRelationshipId" required="true"/>
+            <parameter name="effectiveEndDate" type="Date" required="true"/>
+        </in-parameters>
+        <out-parameters>
+            <parameter name="success" type="Boolean"/>
+        </out-parameters>
+    </service>
+
+    <!-- Party Merge Services -->
+
+    <service verb="merge" noun="Parties" type="script" location="component://durion-crm/script/groovy/PartyServices.groovy#mergeParties">
+        <description>
+            Merge two parties (survivor wins).
+            Source party becomes MERGED status and reads return 409 with mergedToPartyId.
+        </description>
+        <in-parameters>
+            <parameter name="survivorPartyId" required="true"/>
+            <parameter name="losingPartyId" required="true"/>
+            <parameter name="justification" required="true"/>
+        </in-parameters>
+        <out-parameters>
+            <parameter name="mergeAuditId"/>
+            <parameter name="survivorPartyId"/>
+            <parameter name="losingPartyId"/>
+            <parameter name="status"/>
+            <parameter name="completedAt"/>
+        </out-parameters>
+    </service>
+
+    <!-- Reference Data Services -->
+
+    <service verb="list" noun="BillingTerms" type="script" location="component://durion-crm/script/groovy/PartyServices.groovy#listBillingTerms">
+        <description>
+            Get list of billing terms from Billing domain.
+            Used to populate dropdown in create forms.
+        </description>
+        <in-parameters>
+            <parameter name="activeOnly" type="Boolean" default="true"/>
+        </in-parameters>
+        <out-parameters>
+            <parameter name="items" type="List"/>
+        </out-parameters>
+    </service>
+
+</services>
