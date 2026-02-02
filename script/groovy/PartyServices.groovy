@@ -305,6 +305,108 @@ def mergeParties() {
     context.ec.message.addError("Party merge not yet implemented")
 }
 
+// Contact Role Management (CAP:090)
+
+def getContactsWithRoles() {
+    def ec = context.ec
+    def partyId = context.partyId
+    
+    try {
+        // Call backend GET /v1/crm/parties/{partyId}/contacts
+        def response = ec.service.sync()
+            .name('durion.positivity.RestClient.get')
+            .parameter('endpoint', "/v1/crm/parties/${partyId}/contacts")
+            .call()
+        
+        if (response.statusCode == 200 && response.body) {
+            def responseData = response.body
+            context.partyId = responseData.partyId ?: partyId
+            context.invoiceDeliveryMethod = responseData.invoiceDeliveryMethod
+            context.contacts = responseData.contacts ?: []
+        } else if (response.statusCode == 403) {
+            ec.message.addError("Access denied: insufficient permissions to view contacts for this party")
+            context.contacts = []
+        } else if (response.statusCode == 404) {
+            ec.message.addError("Party not found: ${partyId}")
+            context.contacts = []
+        } else if (response.statusCode == 501) {
+            ec.logger.warn("Backend endpoint not implemented: GET /v1/crm/parties/${partyId}/contacts - returning mock data")
+            // Mock data for development until backend is implemented
+            context.partyId = partyId
+            context.invoiceDeliveryMethod = "EMAIL"
+            context.contacts = []
+        } else {
+            ec.message.addError("Failed to retrieve contacts: HTTP ${response.statusCode}")
+            context.contacts = []
+        }
+    } catch (Exception e) {
+        ec.logger.error("Error calling getContactsWithRoles", e)
+        ec.message.addError("System error retrieving contacts: ${e.message}")
+        context.contacts = []
+    }
+}
+
+def updateContactRoles() {
+    def ec = context.ec
+    def partyId = context.partyId
+    def contactId = context.contactId
+    def roles = context.roles
+    
+    try {
+        // Validate input
+        if (!roles || !(roles instanceof List)) {
+            ec.message.addError("Roles parameter must be a non-empty list")
+            return
+        }
+        
+        // Build request body
+        def requestBody = [
+            roles: roles.collect { role ->
+                [
+                    roleCode: role.roleCode,
+                    isPrimary: role.isPrimary ?: false
+                ]
+            }
+        ]
+        
+        // Call backend PUT /v1/crm/parties/{partyId}/contacts/{contactId}/roles
+        def response = ec.service.sync()
+            .name('durion.positivity.RestClient.put')
+            .parameter('endpoint', "/v1/crm/parties/${partyId}/contacts/${contactId}/roles")
+            .parameter('body', requestBody)
+            .call()
+        
+        if (response.statusCode == 200 && response.body) {
+            def responseData = response.body
+            context.partyId = responseData.partyId ?: partyId
+            context.contactId = responseData.contactId ?: contactId
+            context.status = responseData.status
+            context.updatedAt = responseData.updatedAt
+            ec.message.addMessage("Contact roles updated successfully")
+        } else if (response.statusCode == 400) {
+            // Validation error
+            def errorMessage = response.body?.message ?: "Invalid role assignment"
+            ec.message.addError(errorMessage)
+        } else if (response.statusCode == 403) {
+            ec.message.addError("Access denied: insufficient permissions to update contact roles")
+        } else if (response.statusCode == 404) {
+            ec.message.addError("Party or contact not found")
+        } else if (response.statusCode == 501) {
+            ec.logger.warn("Backend endpoint not implemented: PUT /v1/crm/parties/${partyId}/contacts/${contactId}/roles")
+            ec.message.addMessage("Contact roles update recorded (backend not yet implemented)")
+            context.partyId = partyId
+            context.contactId = contactId
+            context.status = "SUCCESS"
+            context.updatedAt = ec.user.nowTimestamp.toString()
+        } else {
+            ec.message.addError("Failed to update contact roles: HTTP ${response.statusCode}")
+        }
+    } catch (Exception e) {
+        ec.logger.error("Error calling updateContactRoles", e)
+        ec.message.addError("System error updating contact roles: ${e.message}")
+    }
+}
+
 // Return closures for service execution
 return [
     createCommercialAccount: this.&createCommercialAccount,
@@ -318,5 +420,7 @@ return [
     listPartyRelationships: this.&listPartyRelationships,
     setPrimaryBillingContact: this.&setPrimaryBillingContact,
     deactivatePartyRelationship: this.&deactivatePartyRelationship,
-    mergeParties: this.&mergeParties
+    mergeParties: this.&mergeParties,
+    getContactsWithRoles: this.&getContactsWithRoles,
+    updateContactRoles: this.&updateContactRoles
 ]

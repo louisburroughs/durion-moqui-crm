@@ -37,17 +37,29 @@
         <default-response url="../PartyFind"/>
     </transition>
 
+    <transition name="editRoles">
+        <default-response url="./ContactRolesEdit">
+            <parameter name="partyId"/>
+            <parameter name="contactId"/>
+            <parameter name="returnUrl" from="ec.web.getScreenUrl('.', null, false)"/>
+        </default-response>
+    </transition>
+
     <actions>
         <!-- Get account details -->
         <service-call name="durion.crm.PartyServices.get#Party" in-map="[partyId: partyId]" out-map="partyResult"/>
         <set field="account" from="partyResult.party"/>
 
-        <!-- List existing contacts -->
-        <service-call name="durion.crm.PartyServices.list#PartyRelationships" in-map="[fromPartyId: partyId, activeOnly: true]" out-map="relationshipsResult"/>
-        <set field="contacts" from="relationshipsResult.items ?: []"/>
+        <!-- Load contacts with roles -->
+        <service-call name="durion.crm.PartyServices.get#ContactsWithRoles" in-map="[partyId: partyId]" out-map="contactsResult"/>
+        <set field="contacts" from="contactsResult.contacts ?: []"/>
+        <set field="invoiceDeliveryMethod" from="contactsResult.invoiceDeliveryMethod"/>
 
         <!-- Check permissions -->
+        <set field="canView" from="ec.user.hasPermission('crm:contact:view')"/>
+        <set field="canViewRoles" from="ec.user.hasPermission('crm:contact_role:view')"/>
         <set field="canEdit" from="ec.user.hasPermission('crm:party:edit')"/>
+        <set field="canEditRoles" from="ec.user.hasPermission('crm:contact_role:assign')"/>
     </actions>
 
     <widgets>
@@ -61,11 +73,11 @@
             <box-body>
 
                 <!-- Permission Denied -->
-                <section name="PermissionDeniedSection" condition="!ec.user.hasPermission('crm:party:view')">
+                <section name="PermissionDeniedSection" condition="!canView">
                     <widgets>
                         <container style="alert alert-danger">
                             <label text="Access Denied" type="h5"/>
-                            <label text="You do not have permission to view account contacts. Required permission: crm:party:view"/>
+                            <label text="You do not have permission to view account contacts. Required permission: crm:contact:view"/>
                         </container>
                     </widgets>
                 </section>
@@ -98,7 +110,7 @@
                     </widgets>
                 </section>
 
-                <section name="MainSection" condition="ec.user.hasPermission('crm:party:view')">
+                <section name="MainSection" condition="canView">
                     <widgets>
 
                         <!-- Account Summary -->
@@ -107,6 +119,11 @@
                                 <container style="mb-4">
                                     <label text="Account: ${account.legalName}" type="h6"/>
                                     <label text="Party ID: ${partyId}" style="text-muted small"/>
+                                    <section name="InvoiceDeliverySection" condition="invoiceDeliveryMethod">
+                                        <widgets>
+                                            <label text="Invoice Delivery: ${invoiceDeliveryMethod}" style="text-muted small ml-3"/>
+                                        </widgets>
+                                    </section>
                                 </container>
                             </widgets>
                         </section>
@@ -189,65 +206,68 @@
                                     <widgets>
                                         <form-list name="ContactsList" list="contacts" skip-form="true">
 
-                                            <field name="toPartyId">
-                                                <default-field title="Person">
-                                                    <link url="PartyDetail" text="${toPartyFullName} (${toPartyId})" link-type="anchor">
-                                                        <parameter name="partyId" from="toPartyId"/>
+                                            <field name="contactName">
+                                                <default-field title="Contact Name">
+                                                    <link url="PartyDetail" text="${contactName}" link-type="anchor">
+                                                        <parameter name="partyId" from="contactId"/>
                                                     </link>
                                                 </default-field>
                                             </field>
 
-                                            <field name="relationshipTypeCode">
-                                                <default-field title="Role">
-                                                    <display text="${relationshipTypeDescription ?: relationshipTypeCode}"/>
+                                            <field name="email">
+                                                <default-field title="Email">
+                                                    <display text="${email ?: '-'}"/>
                                                 </default-field>
                                             </field>
 
-                                            <field name="isPrimaryBilling">
-                                                <default-field title="Primary Billing">
-                                                    <display text="${isPrimaryBilling == true ? 'Yes' : ''}"/>
+                                            <field name="phone">
+                                                <default-field title="Phone">
+                                                    <display text="${phone ?: '-'}"/>
                                                 </default-field>
                                             </field>
 
-                                            <field name="contactInfo">
-                                                <default-field title="Contact Info">
-                                                    <display text="${primaryEmail ?: ''} ${primaryPhone ? '(' + primaryPhone + ')' : ''}"/>
+                                            <field name="hasPrimaryEmail">
+                                                <default-field title="Primary Email">
+                                                    <display text="${hasPrimaryEmail ? 'Yes' : 'No'}"/>
                                                 </default-field>
                                             </field>
 
-                                            <field name="status">
-                                                <default-field>
-                                                    <display text="${status}"/>
-                                                </default-field>
-                                            </field>
-
-                                            <field name="createdAt">
-                                                <default-field title="Added">
-                                                    <display text="${ec.l10n.format(createdAt, 'yyyy-MM-dd')}"/>
+                                            <field name="rolesDisplay">
+                                                <conditional-field condition="canViewRoles">
+                                                    <default-field title="Roles">
+                                                        <render-mode>
+                                                            <text type="html"><![CDATA[
+                                                                <#assign rolesList = roles ?: []>
+                                                                <#if rolesList?has_content>
+                                                                    <#list rolesList as role>
+                                                                        <span class="badge badge-secondary mr-1">
+                                                                            ${role.roleCode}<#if role.isPrimary> (Primary)</#if>
+                                                                        </span>
+                                                                    </#list>
+                                                                <#else>
+                                                                    <span class="text-muted">No roles assigned</span>
+                                                                </#if>
+                                                            ]]></text>
+                                                        </render-mode>
+                                                    </default-field>
+                                                </conditional-field>
+                                                <default-field title="Roles">
+                                                    <display text="(Permission required)"/>
                                                 </default-field>
                                             </field>
 
                                             <!-- Actions -->
                                             <field name="actions">
-                                                <conditional-field condition="canEdit &amp;&amp; status == 'ACTIVE'">
+                                                <conditional-field condition="canEditRoles">
                                                     <container>
-                                                        <!-- Set Primary Billing (only for BILLING role) -->
-                                                        <section name="SetPrimarySection" condition="relationshipTypeCode == 'BILLING' &amp;&amp; !isPrimaryBilling">
-                                                            <widgets>
-                                                                <link url="setPrimaryBilling" text="Set Primary" link-type="anchor">
-                                                                    <parameter name="partyId" from="partyId"/>
-                                                                    <parameter name="relationshipId"/>
-                                                                </link>
-                                                                <label text=" | " style="mx-1"/>
-                                                            </widgets>
-                                                        </section>
-
-                                                        <!-- Deactivate -->
-                                                        <link url="deactivateContact" text="Deactivate" link-type="anchor" confirmation="Are you sure you want to deactivate this contact relationship?">
-                                                            <parameter name="partyId" from="partyId"/>
-                                                            <parameter name="relationshipId"/>
+                                                        <link url="editRoles" text="Edit Roles" link-type="anchor">
+                                                            <parameter name="partyId"/>
+                                                            <parameter name="contactId"/>
                                                         </link>
                                                     </container>
+                                                </conditional-field>
+                                                <conditional-field condition="!canEditRoles &amp;&amp; canViewRoles">
+                                                    <display text="View Only"/>
                                                 </conditional-field>
                                                 <default-field>
                                                     <display text=""/>
@@ -263,25 +283,34 @@
 
                         <!-- Business Rules Info Panel -->
                         <container-box>
-                            <box-header title="Business Rules"/>
+                            <box-header title="Contact Role Business Rules"/>
                             <box-body>
                                 <container style="alert alert-info">
-                                    <label text="Contact Relationship Rules:" type="strong"/>
+                                    <label text="Contact Role Rules:" type="strong"/>
                                     <ul>
-                                        <li>
-                                            <label text="APPROVER: Person authorized to approve work order estimates for this account"/>
-                                        </li>
                                         <li>
                                             <label text="BILLING: Person who receives invoices and billing communications"/>
                                         </li>
                                         <li>
-                                            <label text="Each account must have exactly one PRIMARY billing contact"/>
+                                            <label text="APPROVER: Person authorized to approve work order estimates"/>
                                         </li>
                                         <li>
-                                            <label text="Setting a new primary billing contact automatically removes primary flag from the previous one"/>
+                                            <label text="DRIVER: Vehicle operator for dispatch and delivery"/>
                                         </li>
                                         <li>
-                                            <label text="Deactivated contacts remain in history but are not shown in active lists"/>
+                                            <label text="Each contact can have multiple roles assigned"/>
+                                        </li>
+                                        <li>
+                                            <label text="For each role, only one contact can be marked as PRIMARY per account"/>
+                                        </li>
+                                        <li>
+                                            <label text="Setting a new primary for a role automatically demotes the previous primary"/>
+                                        </li>
+                                        <li>
+                                            <label text="When invoice delivery method is EMAIL, at least one billing contact with a primary email is required"/>
+                                        </li>
+                                        <li>
+                                            <label text="Permissions required: crm:contact_role:view (view roles), crm:contact_role:assign (edit roles)"/>
                                         </li>
                                     </ul>
                                 </container>

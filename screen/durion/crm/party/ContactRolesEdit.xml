@@ -1,0 +1,222 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<screen xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://moqui.org/xsd/xml-screen-3.xsd" 
+        default-menu-title="Edit Contact Roles" standalone="true" require-authentication="true">
+
+    <parameter name="partyId" required="true"/>
+    <parameter name="contactId" required="true"/>
+    <parameter name="returnUrl"/>
+
+    <transition name="updateRoles">
+        <actions>
+            <!-- Build roles list from form parameters -->
+            <set field="roles" from="[]"/>
+            
+            <!-- BILLING role -->
+            <if condition="hasRoleBilling == 'true'">
+                <set field="roles" from="roles + [[roleCode: 'BILLING', isPrimary: isPrimaryBilling == 'true']]"/>
+            </if>
+            
+            <!-- APPROVER role -->
+            <if condition="hasRoleApprover == 'true'">
+                <set field="roles" from="roles + [[roleCode: 'APPROVER', isPrimary: isPrimaryApprover == 'true']]"/>
+            </if>
+            
+            <!-- DRIVER role -->
+            <if condition="hasRoleDriver == 'true'">
+                <set field="roles" from="roles + [[roleCode: 'DRIVER', isPrimary: isPrimaryDriver == 'true']]"/>
+            </if>
+            
+            <service-call name="durion.crm.PartyServices.update#ContactRoles" in-map="[partyId: partyId, contactId: contactId, roles: roles]"/>
+        </actions>
+        <default-response url="${returnUrl ?: '../CommercialAccountContacts'}">
+            <parameter name="partyId"/>
+        </default-response>
+    </transition>
+
+    <transition name="cancel">
+        <default-response url="${returnUrl ?: '../CommercialAccountContacts'}">
+            <parameter name="partyId"/>
+        </default-response>
+    </transition>
+
+    <actions>
+        <!-- Load account details -->
+        <service-call name="durion.crm.PartyServices.get#Party" in-map="[partyId: partyId]" out-map="partyResult"/>
+        <set field="account" from="partyResult.party"/>
+        
+        <!-- Load contacts with roles -->
+        <service-call name="durion.crm.PartyServices.get#ContactsWithRoles" in-map="[partyId: partyId]" out-map="contactsResult"/>
+        <set field="contacts" from="contactsResult.contacts ?: []"/>
+        
+        <!-- Find the contact we're editing -->
+        <set field="contact" from="contacts.find { it.contactId == contactId }"/>
+        
+        <!-- Extract current role assignments for pre-population -->
+        <set field="currentRoles" from="contact?.roles ?: []"/>
+        <set field="hasRoleBilling" from="currentRoles.any { it.roleCode == 'BILLING' } ? 'true' : 'false'"/>
+        <set field="hasRoleApprover" from="currentRoles.any { it.roleCode == 'APPROVER' } ? 'true' : 'false'"/>
+        <set field="hasRoleDriver" from="currentRoles.any { it.roleCode == 'DRIVER' } ? 'true' : 'false'"/>
+        <set field="isPrimaryBilling" from="currentRoles.find { it.roleCode == 'BILLING' }?.isPrimary ? 'true' : 'false'"/>
+        <set field="isPrimaryApprover" from="currentRoles.find { it.roleCode == 'APPROVER' }?.isPrimary ? 'true' : 'false'"/>
+        <set field="isPrimaryDriver" from="currentRoles.find { it.roleCode == 'DRIVER' }?.isPrimary ? 'true' : 'false'"/>
+        
+        <!-- Check permissions -->
+        <set field="canEdit" from="ec.user.hasPermission('crm:contact_role:assign')"/>
+    </actions>
+
+    <widgets>
+        <container-dialog id="EditRolesDialog" button-text="Edit Roles" width="600">
+            <container-box>
+                <box-header title="Edit Contact Roles"/>
+                <box-body>
+
+                    <!-- Permission Denied -->
+                    <section name="PermissionDeniedSection" condition="!canEdit">
+                        <widgets>
+                            <container style="alert alert-danger">
+                                <label text="Access Denied" type="h5"/>
+                                <label text="You do not have permission to update contact roles. Required permission: crm:contact_role:assign"/>
+                            </container>
+                        </widgets>
+                    </section>
+
+                    <!-- Error State -->
+                    <section name="ErrorSection" condition="ec.message.hasError()">
+                        <widgets>
+                            <container style="alert alert-danger">
+                                <label text="Error" type="h5"/>
+                                <render-mode>
+                                    <text type="html" location="component://webroot/screen/webroot/MessageText.html.ftl"/>
+                                </render-mode>
+                            </container>
+                        </widgets>
+                    </section>
+
+                    <!-- Success Messages -->
+                    <section name="SuccessSection" condition="ec.message.messages">
+                        <widgets>
+                            <container style="alert alert-success">
+                                <render-mode>
+                                    <text type="html" location="component://webroot/screen/webroot/MessageText.html.ftl"/>
+                                </render-mode>
+                            </container>
+                        </widgets>
+                    </section>
+
+                    <!-- Edit Form -->
+                    <section name="EditFormSection" condition="canEdit">
+                        <widgets>
+
+                            <!-- Contact Info Summary -->
+                            <container style="mb-4">
+                                <label text="Contact: ${contact?.contactName ?: contactId}" type="h6"/>
+                                <section name="EmailSection" condition="contact?.email">
+                                    <widgets>
+                                        <label text="Email: ${contact.email}" style="text-muted small"/>
+                                    </widgets>
+                                </section>
+                                <section name="PhoneSection" condition="contact?.phone">
+                                    <widgets>
+                                        <label text="Phone: ${contact.phone}" style="text-muted small"/>
+                                    </widgets>
+                                </section>
+                            </container>
+
+                            <!-- Role Assignment Form -->
+                            <form-single name="UpdateRolesForm" transition="updateRoles">
+                                <field name="partyId"><default-field><hidden/></default-field></field>
+                                <field name="contactId"><default-field><hidden/></default-field></field>
+                                <field name="returnUrl"><default-field><hidden/></default-field></field>
+
+                                <field name="rolesHeader">
+                                    <default-field title="">
+                                        <label text="Select Roles and Primary Flags" type="strong"/>
+                                        <label text="Check the roles to assign to this contact. For each role, you can optionally mark it as primary." style="form-text text-muted small"/>
+                                    </default-field>
+                                </field>
+
+                                <!-- BILLING Role -->
+                                <field name="hasRoleBilling">
+                                    <default-field title="">
+                                        <check all-checked="${hasRoleBilling}">
+                                            <option key="true" text="BILLING - Receives invoices and billing communications"/>
+                                        </check>
+                                    </default-field>
+                                </field>
+
+                                <field name="isPrimaryBilling">
+                                    <conditional-field condition="hasRoleBilling == 'true'" title="">
+                                        <check all-checked="${isPrimaryBilling}">
+                                            <option key="true" text="Primary Billing Contact"/>
+                                        </check>
+                                        <label text="Setting a new primary billing contact automatically demotes the previous one." style="form-text text-muted small"/>
+                                    </conditional-field>
+                                    <default-field><ignored/></default-field>
+                                </field>
+
+                                <!-- APPROVER Role -->
+                                <field name="hasRoleApprover">
+                                    <default-field title="">
+                                        <check all-checked="${hasRoleApprover}">
+                                            <option key="true" text="APPROVER - Can approve work order estimates"/>
+                                        </check>
+                                    </default-field>
+                                </field>
+
+                                <field name="isPrimaryApprover">
+                                    <conditional-field condition="hasRoleApprover == 'true'" title="">
+                                        <check all-checked="${isPrimaryApprover}">
+                                            <option key="true" text="Primary Approver"/>
+                                        </check>
+                                        <label text="Setting a new primary approver automatically demotes the previous one." style="form-text text-muted small"/>
+                                    </conditional-field>
+                                    <default-field><ignored/></default-field>
+                                </field>
+
+                                <!-- DRIVER Role -->
+                                <field name="hasRoleDriver">
+                                    <default-field title="">
+                                        <check all-checked="${hasRoleDriver}">
+                                            <option key="true" text="DRIVER - Vehicle operator for dispatch"/>
+                                        </check>
+                                    </default-field>
+                                </field>
+
+                                <field name="isPrimaryDriver">
+                                    <conditional-field condition="hasRoleDriver == 'true'" title="">
+                                        <check all-checked="${isPrimaryDriver}">
+                                            <option key="true" text="Primary Driver"/>
+                                        </check>
+                                        <label text="Setting a new primary driver automatically demotes the previous one." style="form-text text-muted small"/>
+                                    </conditional-field>
+                                    <default-field><ignored/></default-field>
+                                </field>
+
+                                <!-- Billing Contact Validation Info -->
+                                <field name="billingRequirementInfo">
+                                    <default-field title="">
+                                        <container style="alert alert-info mt-3">
+                                            <label text="Note: When invoice delivery method is EMAIL, at least one billing contact with a primary email is required." style="small"/>
+                                        </container>
+                                    </default-field>
+                                </field>
+
+                                <!-- Action Buttons -->
+                                <field name="submitButton">
+                                    <default-field title="">
+                                        <container style="d-flex justify-content-end mt-3">
+                                            <link url="cancel" text="Cancel" btn-type="default" parameter-map="[partyId: partyId, returnUrl: returnUrl]"/>
+                                            <submit text="Save Changes" btn-type="primary"/>
+                                        </container>
+                                    </default-field>
+                                </field>
+                            </form-single>
+
+                        </widgets>
+                    </section>
+
+                </box-body>
+            </container-box>
+        </container-dialog>
+    </widgets>
+</screen>
