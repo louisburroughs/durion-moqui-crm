@@ -216,4 +216,47 @@
         </out-parameters>
     </service>
 
+    <!-- Contact Role Management Services (CAP:090) -->
+
+    <service verb="get" noun="ContactsWithRoles" type="script" location="component://durion-crm/script/groovy/PartyServices.groovy#getContactsWithRoles">
+        <description>
+            Get all contacts for a party including their role assignments.
+            Calls backend GET /v1/crm/parties/{partyId}/contacts endpoint.
+        </description>
+        <in-parameters>
+            <parameter name="partyId" required="true"/>
+        </in-parameters>
+        <out-parameters>
+            <parameter name="partyId"/>
+            <parameter name="invoiceDeliveryMethod"/>
+            <parameter name="contacts" type="List"/>
+        </out-parameters>
+    </service>
+
+    <service verb="update" noun="ContactRoles" type="script" location="component://durion-crm/script/groovy/PartyServices.groovy#updateContactRoles">
+        <description>
+            Update role assignments for a specific contact within a party.
+            Calls backend PUT /v1/crm/parties/{partyId}/contacts/{contactId}/roles endpoint.
+            Supports multiple roles per contact with primary flags.
+            Backend automatically demotes previous primary when a new primary is set.
+        </description>
+        <in-parameters>
+            <parameter name="partyId" required="true"/>
+            <parameter name="contactId" required="true"/>
+            <parameter name="roles" type="List" required="true">
+                <description>
+                    List of role assignments. Each item must have:
+                    - roleCode (string): BILLING|APPROVER|DRIVER
+                    - isPrimary (boolean): Primary flag for this role
+                </description>
+            </parameter>
+        </in-parameters>
+        <out-parameters>
+            <parameter name="partyId"/>
+            <parameter name="contactId"/>
+            <parameter name="status"/>
+            <parameter name="updatedAt"/>
+        </out-parameters>
+    </service>
+
 </services>
