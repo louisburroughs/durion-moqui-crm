@@ -31,9 +31,19 @@
                 Map searchResult = ec.service.sync().name("durion.positivity.VehicleInventoryServices.search#Vehicles").parameters(searchParams).call()
                 vehicles = searchResult.results ?: []
                 totalCount = searchResult.total ?: 0
+                
+                // Calculate pagination values
+                totalPages = (int) Math.ceil((double) totalCount / pageSize)
+                currentPage = pageIndex + 1 // Display 1-based page numbers
+                hasNextPage = pageIndex < (totalPages - 1)
+                hasPrevPage = pageIndex > 0
             } else {
                 vehicles = []
                 totalCount = 0
+                totalPages = 0
+                currentPage = 0
+                hasNextPage = false
+                hasPrevPage = false
             }
         ]]>        </script>
     </actions>
@@ -117,6 +127,19 @@
                 </form-list>
 
                 <label text="Found ${totalCount} vehicle(s)" condition="totalCount > 0" type="p"/>
+                
+                <!-- Pagination Controls -->
+                <container condition="totalCount > 0" style="text-center margin-top: 15px;">
+                    <link url="." text="← Previous" 
+                          parameter-map="[query: query, pageIndex: pageIndex - 1, pageSize: pageSize]" 
+                          condition="hasPrevPage" 
+                          btn-type="default"/>
+                    <label text="Page ${currentPage} of ${totalPages}" style="margin: 0 15px;"/>
+                    <link url="." text="Next →" 
+                          parameter-map="[query: query, pageIndex: pageIndex + 1, pageSize: pageSize]" 
+                          condition="hasNextPage" 
+                          btn-type="default"/>
+                </container>
             </box-body>
             <box-toolbar>
                 <link url="createVehicle" text="Create New Vehicle" btn-type="primary"/>
