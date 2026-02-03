@@ -129,7 +129,7 @@
                 <label text="Found ${totalCount} vehicle(s)" condition="totalCount > 0" type="p"/>
                 
                 <!-- Pagination Controls -->
-                <container condition="totalCount > 0" style="text-align: center; margin-top: 15px;">
+                <container condition="totalPages > 1" style="text-align: center; margin-top: 15px;">
                     <link url="." text="← Previous" 
                           parameter-map="[query: query, pageIndex: pageIndex - 1, pageSize: pageSize]" 
                           condition="hasPrevPage" 
