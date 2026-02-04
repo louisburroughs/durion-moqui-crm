@@ -41,7 +41,7 @@
                         </default-field>
                     </field>
 
-                    <field name="vinNumber">
+                    <field name="vin">
                         <default-field title="VIN *" tooltip="17-character Vehicle Identification Number (excludes I, O, Q)">
                             <text-line size="20" maxlength="17" placeholder="1HGCM82633A004352"/>
                         </default-field>
