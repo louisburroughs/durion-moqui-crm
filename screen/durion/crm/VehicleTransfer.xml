@@ -2,16 +2,16 @@
 <screen xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://moqui.org/xsd/xml-screen-3.xsd" default-menu-title="Transfer Vehicle">
 
     <parameter name="vehicleId" required="true"/>
-    <parameter name="customerId" required="true"/>
+    <parameter name="partyId" required="true"/>
 
     <transition name="transferVehicle">
         <service-call name="durion.positivity.CrmRestServices.transfer#VehicleBetweenCustomers" in-map="context" out-map="transferResult"/>
-        <default-response url="../VehicleEdit" parameter-map="[vehicleId: vehicleId, customerId: transferResult.targetCustomerId]"/>
+        <default-response url="../VehicleEdit" parameter-map="[vehicleId: vehicleId, customerId: targetPartyId]"/>
         <error-response url="."/>
     </transition>
 
     <transition name="cancel">
-        <default-response url="../VehicleEdit" parameter-map="[vehicleId: vehicleId, customerId: customerId]"/>
+        <default-response url="../VehicleEdit" parameter-map="[vehicleId: vehicleId, customerId: partyId]"/>
     </transition>
 
     <transition name="searchCustomers">
@@ -32,33 +32,9 @@
             }
             
             // Get source customer details
-            if (customerId) {
-                Map customerResult = ec.service.sync().name("durion.crm.PartyServices.get#Party").parameters([partyId: customerId]).call()
-                sourceCustomer = customerResult?.party
-            }
-            
-            // Handle customer search
-            if (ec.web.parameters.name || ec.web.parameters.email || ec.web.parameters.phone || ec.web.parameters.taxId || ec.web.parameters.partyType || ec.web.parameters.status) {
-                Map searchParams = [
-                    name: ec.web.parameters.name,
-                    email: ec.web.parameters.email,
-                    phone: ec.web.parameters.phone,
-                    taxId: ec.web.parameters.taxId,
-                    partyType: ec.web.parameters.partyType,
-                    status: ec.web.parameters.status,
-                    pageSize: ec.web.parameters.pageSize ?: 20
-                ]
-                Map searchResult = ec.service.sync().name("durion.crm.PartyServices.search#Parties").parameters(searchParams).call()
-                customerList = searchResult?.results ?: []
-                totalCustomers = searchResult?.totalCount ?: 0
-                showSearchResults = true
-            }
-            
-            // Handle selected customer
-            if (ec.web.parameters.selectedCustomerId) {
-                selectedCustomerId = ec.web.parameters.selectedCustomerId
-                Map selectedResult = ec.service.sync().name("durion.crm.PartyServices.get#Party").parameters([partyId: selectedCustomerId]).call()
-                selectedCustomer = selectedResult?.party
+            if (partyId) {
+                Map customerResult = ec.service.sync().name("durion.positivity.CrmRestServices.get#Party").parameters([partyId: partyId]).call()
+                sourceCustomer = customerResult
             }
         ]]>        </script>
     </actions>
@@ -90,12 +66,15 @@
                             <hidden default-value="${vehicleId}"/>
                         </default-field>
                     </field>
-                    <field name="customerId">
+                    <field name="partyId">
                         <default-field>
-                            <hidden default-value="${customerId}"/>
+                            <hidden default-value="${partyId}"/>
                         </default-field>
                     </field>
 
+                    <field name="targetPartyId">
+                        <default-field title="Target Customer *" tooltip="Enter the party ID to transfer to">
+                            <text-line size="40" placeholder="Party ID"/>
                     <field name="targetCustomerId">
                         <default-field title="Target Customer *" tooltip="Enter the customer ID to transfer to">
                             <text-line size="40" placeholder="Customer UUID" default-value="${selectedCustomerId}"/>
