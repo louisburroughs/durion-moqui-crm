@@ -36,9 +36,9 @@
 
                 <form-single name="CreateVehicle" transition="createVehicle">
                     <field name="customerId">
-                        <default-field title="Customer *" tooltip="Select the customer who owns this vehicle">
+                        <default-field title="Customer">
                             <drop-down required="true">
-                                <entity-options key="${customerId}" text="${customerName}">
+                                <entity-options key="customerId" text="customerName">
                                     <entity-find entity-name="durion.crm.DurCustomer">
                                         <order-by field-name="customerName"/>
                                     </entity-find>
