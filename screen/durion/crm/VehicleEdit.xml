@@ -127,6 +127,7 @@
                 </form-single>
             </box-body>
             <box-toolbar>
+                <!-- VehicleTransfer expects partyId, but VehicleEdit uses customerId for vehicle ownership -->
                 <link url="transferVehicle" text="Transfer Vehicle" btn-type="info" parameter-map="[vehicleId: vehicleId, partyId: customerId]"/>
                 <link url="deleteVehicle" text="Delete Vehicle" btn-type="danger" confirmation="Are you sure you want to delete this vehicle?" parameter-map="[vehicleId: vehicleId, customerId: customerId]"/>
             </box-toolbar>
