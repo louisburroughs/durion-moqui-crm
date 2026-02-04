@@ -5,7 +5,7 @@
 
     <transition name="createVehicle">
         <service-call name="durion.positivity.CrmRestServices.create#VehicleForCustomer" out-map="createResult"/>
-        <default-response url="../VehicleEdit" parameter-map="[vehicleId: createResult.vehicleId]"/>
+        <default-response url="../VehicleEdit" parameter-map="[vehicleId: createResult.vehicleId ?: createResult.vehicle?.vehicleId]"/>
         <error-response url="."/>
     </transition>
 
