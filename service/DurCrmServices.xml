@@ -48,21 +48,25 @@
             }
 
             // Normalize base URL to avoid double slashes when appending paths
-            String normalizedGatewayUrl = gatewayUrl.replaceAll('/+$', '')
+            String baseUrl = gatewayUrl.replaceAll('/+$', '')
 
             List<String> queryParts = []
             if (hasPartyId) queryParts.add('partyId=' + URLEncoder.encode(partyId.toString().trim(), 'UTF-8'))
             if (hasVehicleId) queryParts.add('vehicleId=' + URLEncoder.encode(vehicleId.toString().trim(), 'UTF-8'))
 
-            String uri = normalizedGatewayUrl + '/v1/crm/snapshot' + (queryParts ? ('?' + queryParts.join('&')) : '')
+            String uri = baseUrl + '/v1/crm/snapshot' + (queryParts ? ('?' + queryParts.join('&')) : '')
             String jwtToken = ec.user.getLoginToken()
+
+            // Configure timeouts to prevent indefinite blocking
+            int connectTimeoutMs = 30000  // 30 seconds
+            int readTimeoutMs = 60000     // 60 seconds
 
             RestClient restClient = ec.service.rest()
                 .method('GET')
                 .uri(uri)
                 .addHeader('Accept', 'application/json')
                 .addHeader('X-API-Version', '1')
-                .timeout(30000, 60000) // 30s connect, 60s read timeout
+                .timeout(connectTimeoutMs, readTimeoutMs)
 
             if (jwtToken) {
                 restClient.addHeader('Authorization', "Bearer ${jwtToken}")
