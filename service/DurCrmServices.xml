@@ -2,6 +2,121 @@
 <services xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
           xsi:noNamespaceSchemaLocation="http://moqui.org/xsd/service-definition-3.xsd">
 
+    <service verb="get" noun="CrmSnapshot" type="inline">
+        <description>
+            Retrieve CRM Snapshot from pos-customer via API Gateway (server-side proxy).
+            Backend path: GET /v1/crm/snapshot (gateway base URL is configured via pos.gateway.url / POS_GATEWAY_URL).
+        </description>
+        <in-parameters>
+            <parameter name="partyId"/>
+            <parameter name="vehicleId"/>
+        </in-parameters>
+        <out-parameters>
+            <parameter name="snapshot" type="Map"/>
+            <parameter name="statusCode" type="Integer"/>
+            <parameter name="correlationId"/>
+            <parameter name="errorCode"/>
+            <parameter name="errorMessage"/>
+        </out-parameters>
+        <actions>
+            <script><![CDATA[
+            import org.moqui.util.RestClient
+            import java.net.URLEncoder
+
+            statusCode = null
+            correlationId = null
+            errorCode = null
+            errorMessage = null
+            snapshot = null
+
+            boolean hasPartyId = partyId != null && partyId.toString().trim()
+            boolean hasVehicleId = vehicleId != null && vehicleId.toString().trim()
+            if (!hasPartyId && !hasVehicleId) {
+                statusCode = 400
+                errorMessage = 'Enter a Party ID or Vehicle ID to load a snapshot.'
+                ec.message.addError(errorMessage)
+                return
+            }
+
+            // Gateway base URL is required to be configured for CRM
+            String gatewayUrl = System.getProperty('pos.gateway.url', System.getenv('POS_GATEWAY_URL'))
+            if (!gatewayUrl) {
+                statusCode = 500
+                errorMessage = 'Gateway URL not configured. Set pos.gateway.url system property or POS_GATEWAY_URL environment variable.'
+                ec.message.addError(errorMessage)
+                return
+            }
+
+            // Normalize base URL to avoid double slashes when appending paths
+            String baseUrl = gatewayUrl.replaceAll('/+$', '')
+
+            List<String> queryParts = []
+            if (hasPartyId) queryParts.add('partyId=' + URLEncoder.encode(partyId.toString().trim(), 'UTF-8'))
+            if (hasVehicleId) queryParts.add('vehicleId=' + URLEncoder.encode(vehicleId.toString().trim(), 'UTF-8'))
+
+            String uri = baseUrl + '/v1/crm/snapshot' + (queryParts ? ('?' + queryParts.join('&')) : '')
+            String jwtToken = ec.user.getLoginToken()
+
+            // Configure timeouts to prevent indefinite blocking
+            int connectTimeoutMs = 30000  // 30 seconds
+            int readTimeoutMs = 60000     // 60 seconds
+
+            RestClient restClient = ec.service.rest()
+                .method('GET')
+                .uri(uri)
+                .addHeader('Accept', 'application/json')
+                .addHeader('X-API-Version', '1')
+                .timeout(connectTimeoutMs, readTimeoutMs)
+
+            if (jwtToken) {
+                restClient.addHeader('Authorization', "Bearer ${jwtToken}")
+            }
+
+            RestClient.RestResponse response = restClient.call()
+            statusCode = response.statusCode
+
+            try {
+                def headers = null
+                try { headers = response.getHeaders() } catch (Exception ignored) { }
+                if (!headers) headers = response.hasProperty('headers') ? response.headers : null
+
+                def headerValue = headers ? (headers['X-Correlation-Id'] ?: headers['x-correlation-id']) : null
+                if (headerValue instanceof List) correlationId = headerValue ? headerValue[0]?.toString() : null
+                else correlationId = headerValue?.toString()
+            } catch (Exception ignored) {
+                // best-effort only
+            }
+
+            if (response.statusCode == 200) {
+                snapshot = (Map) response.jsonObject()
+                return
+            }
+
+            Map errorBody = null
+            try {
+                errorBody = response.jsonObject() as Map
+            } catch (Exception ignored) {
+                // ignore parse issues; keep generic error message
+            }
+
+            errorCode = (errorBody?.errorCode ?: errorBody?.code) as String
+            errorMessage = (errorBody?.message ?: "Failed to load CRM snapshot: ${response.statusCode} ${response.reasonPhrase}") as String
+
+            if (response.statusCode == 404 && errorCode == 'VEHICLE_HAS_NO_ACTIVE_PARTY') {
+                errorMessage = 'Vehicle exists but has no active associated party. Associate an owner/driver in CRM.'
+            } else if (response.statusCode == 403) {
+                errorMessage = 'You are not authorized to view CRM snapshots. Contact your administrator.'
+            } else if (response.statusCode == 404) {
+                errorMessage = 'No snapshot found for the provided identifier(s).'
+            } else if (response.statusCode >= 500 && correlationId) {
+                errorMessage = "Unable to load CRM snapshot due to a server error. Try again. If the issue persists, provide this correlation ID: ${correlationId}."
+            }
+
+            ec.message.addError(errorMessage)
+            ]]>            </script>
+        </actions>
+    </service>
+
     <!-- Customer Services -->
     <service verb="create" noun="Customer" type="inline">
         <in-parameters>
@@ -179,8 +294,7 @@
         </actions>
     </service>
 
-    <service verb="get" noun="CustomerSummary" type="script"
-             location="component://durion-crm/script/groovy/DurCrmServices.groovy#getCustomerSummary">
+    <service verb="get" noun="CustomerSummary" type="script" location="component://durion-crm/script/groovy/DurCrmServices.groovy#getCustomerSummary">
         <in-parameters>
             <parameter name="customerId" required="true"/>
         </in-parameters>

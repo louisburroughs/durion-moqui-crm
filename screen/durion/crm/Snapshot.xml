@@ -1,0 +1,188 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<screen xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://moqui.org/xsd/xml-screen-3.xsd" default-menu-title="CRM Snapshot" default-menu-index="10">
+
+    <parameter name="partyId"/>
+    <parameter name="vehicleId"/>
+
+    <transition name="load">
+        <default-response url="."/>
+        <error-response url="."/>
+    </transition>
+
+    <transition name="clear">
+        <default-response url="."/>
+        <error-response url="."/>
+    </transition>
+
+    <actions>
+        <script><![CDATA[
+            import java.util.UUID
+            import groovy.json.JsonOutput
+
+            snapshot = null
+            contactsList = []
+            vehiclesList = []
+            contactsEmptyMessage = ''
+            vehiclesEmptyMessage = ''
+            preferencesJson = null
+
+            String partyIdTrim = partyId ? partyId.toString().trim() : ''
+            String vehicleIdTrim = vehicleId ? vehicleId.toString().trim() : ''
+
+            boolean hasPartyId = partyIdTrim
+            boolean hasVehicleId = vehicleIdTrim
+
+            boolean isUuid(String value) {
+                try {
+                    UUID.fromString(value)
+                    return true
+                } catch (Exception ignored) {
+                    return false
+                }
+            }
+
+            validationErrors = []
+            if (hasPartyId && !isUuid(partyIdTrim)) validationErrors.add('Party ID must be a valid UUID.')
+            if (hasVehicleId && !isUuid(vehicleIdTrim)) validationErrors.add('Vehicle ID must be a valid UUID.')
+
+            if ((hasPartyId || hasVehicleId) && !validationErrors.isEmpty()) {
+                validationErrors.each { ec.message.addError(it) }
+                return
+            }
+
+            if (hasPartyId || hasVehicleId) {
+                Map result = ec.service.sync().name('durion.crm.DurCrmServices.get#CrmSnapshot')
+                    .parameters([partyId: partyIdTrim, vehicleId: vehicleIdTrim]).call()
+
+                snapshot = result.snapshot
+
+                if (snapshot) {
+                    contactsList = (snapshot.contacts ?: []) as List
+                    vehiclesList = (snapshot.vehicles ?: []) as List
+
+                    contactsEmptyMessage = contactsList ? '' : 'No contacts found.'
+                    vehiclesEmptyMessage = vehiclesList ? '' : 'No vehicles found.'
+
+                    if (snapshot.preferences) preferencesJson = JsonOutput.prettyPrint(JsonOutput.toJson(snapshot.preferences))
+                } else {
+                    contactsEmptyMessage = ''
+                    vehiclesEmptyMessage = ''
+                }
+            }
+        ]]>        </script>
+    </actions>
+
+    <widgets>
+        <container>
+            <label text="CRM Snapshot Viewer" type="h1"/>
+            <label text="Enter a Party ID or Vehicle ID to load a snapshot."/>
+        </container>
+
+        <container-box>
+            <box-header title="Lookup"/>
+            <box-body>
+                <form-single name="SnapshotLookup" transition="load">
+                    <field name="partyId">
+                        <default-field title="Party ID">
+                            <text-line size="42" default-value="${partyId ?: ''}"/>
+                        </default-field>
+                    </field>
+                    <field name="vehicleId">
+                        <default-field title="Vehicle ID">
+                            <text-line size="42" default-value="${vehicleId ?: ''}"/>
+                        </default-field>
+                    </field>
+                    <field name="loadButton">
+                        <default-field title="Load Snapshot">
+                            <submit/>
+                        </default-field>
+                    </field>
+                </form-single>
+            </box-body>
+            <box-toolbar>
+                <link url="." text="Refresh" btn-type="info" parameter-map="[partyId: partyId, vehicleId: vehicleId]"/>
+                <link url="clear" text="Clear" btn-type="default"/>
+            </box-toolbar>
+        </container-box>
+
+        <container-box>
+            <box-header title="Snapshot Metadata"/>
+            <box-body>
+                <label text="${snapshot?.snapshotMetadata?.version ? 'Version: ' + snapshot.snapshotMetadata.version : 'Version: N/A'}"/>
+                <label text="${snapshot?.snapshotMetadata?.createdAt ? 'Created: ' + ec.l10n.format(snapshot.snapshotMetadata.createdAt, null) : 'Created: N/A'}"/>
+                <label text="${snapshot?.snapshotMetadata?.snapshotId ? 'Snapshot ID: ' + snapshot.snapshotMetadata.snapshotId : 'Snapshot ID: N/A'}"/>
+            </box-body>
+        </container-box>
+
+        <container-box>
+            <box-header title="Account"/>
+            <box-body>
+                <label text="${snapshot?.account?.accountName ? 'Name: ' + snapshot.account.accountName : 'Name: N/A'}"/>
+                <label text="${snapshot?.account?.partyId ? 'Party ID: ' + snapshot.account.partyId : ''}"/>
+                <label text="${snapshot?.account?.accountNumber ? 'Account #: ' + snapshot.account.accountNumber : 'Account #: N/A'}"/>
+                <label text="${snapshot?.account?.accountType ? 'Type: ' + snapshot.account.accountType : 'Type: N/A'}"/>
+            </box-body>
+        </container-box>
+
+        <container-box>
+            <box-header title="Contacts"/>
+            <box-body>
+                <form-list name="ContactsList" list="contactsList" skip-form="true">
+                    <field name="contactId">
+                        <default-field title="Contact ID">
+                            <display/>
+                        </default-field>
+                    </field>
+                    <field name="isPrimary">
+                        <default-field title="Primary">
+                            <display/>
+                        </default-field>
+                    </field>
+                    <field name="name">
+                        <default-field title="Name">
+                            <display/>
+                        </default-field>
+                    </field>
+                </form-list>
+                <label text="${contactsEmptyMessage}"/>
+            </box-body>
+        </container-box>
+
+        <container-box>
+            <box-header title="Vehicles"/>
+            <box-body>
+                <form-list name="VehiclesList" list="vehiclesList" skip-form="true">
+                    <field name="vehicleId">
+                        <default-field title="Vehicle ID">
+                            <display/>
+                        </default-field>
+                    </field>
+                    <field name="year">
+                        <default-field title="Year">
+                            <display/>
+                        </default-field>
+                    </field>
+                    <field name="make">
+                        <default-field title="Make">
+                            <display/>
+                        </default-field>
+                    </field>
+                    <field name="model">
+                        <default-field title="Model">
+                            <display/>
+                        </default-field>
+                    </field>
+                </form-list>
+                <label text="${vehiclesEmptyMessage}"/>
+            </box-body>
+        </container-box>
+
+        <container-box>
+            <box-header title="Preferences"/>
+            <box-body>
+                <label text="${preferencesJson ?: 'No preferences available.'}"/>
+            </box-body>
+        </container-box>
+
+    </widgets>
+</screen>
